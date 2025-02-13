@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import torch.cuda.amp as amp
 import wandb
+import matplotlib.pyplot as plt
 
 from datasets.ssl_dataset import HDF5Dataset_Multimodal_Tiles_Iterable
 from models.modules import TransformerEncoder, ProjectionHead, SpectralTemporalTransformer
@@ -43,30 +44,27 @@ def main():
     run_name = f"BT_Iter_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     wandb_run = wandb.init(project="btfm-iterable", name=run_name, config=config)
 
-    total_steps = config['epochs'] * config['total_samples'] // config['batch_size']
-    logging.info(f"Total steps = {total_steps}")
-
     # 建立模型
-    # s2_enc = TransformerEncoder(
-    #     band_num=12,  # 例如 10个波段+sin/cos
-    #     latent_dim=config['latent_dim'],
-    #     nhead=16,
-    #     num_encoder_layers=32,
-    #     dim_feedforward=512,
-    #     dropout=0.1,
-    #     max_seq_len=config['sample_size_s2']
-    # ).to(device)
-    # s1_enc = TransformerEncoder(
-    #     band_num=4,   # 例如 2个波段+sin/cos
-    #     latent_dim=config['latent_dim'],
-    #     nhead=16,
-    #     num_encoder_layers=32,
-    #     dim_feedforward=512,
-    #     dropout=0.1,
-    #     max_seq_len=config['sample_size_s1']
-    # ).to(device)
-    s2_enc = SpectralTemporalTransformer(data_dim=12).to(device)
-    s1_enc = SpectralTemporalTransformer(data_dim=4).to(device)
+    s2_enc = TransformerEncoder(
+        band_num=12,  # 例如 10个波段+sin/cos
+        latent_dim=config['latent_dim'],
+        nhead=8,
+        num_encoder_layers=16,
+        dim_feedforward=512,
+        dropout=0.1,
+        max_seq_len=config['sample_size_s2']
+    ).to(device)
+    s1_enc = TransformerEncoder(
+        band_num=4,   # 例如 2个波段+sin/cos
+        latent_dim=config['latent_dim'],
+        nhead=8,
+        num_encoder_layers=16,
+        dim_feedforward=512,
+        dropout=0.1,
+        max_seq_len=config['sample_size_s1']
+    ).to(device)
+    # s2_enc = SpectralTemporalTransformer(data_dim=12).to(device)
+    # s1_enc = SpectralTemporalTransformer(data_dim=4).to(device)
     
     if config['fusion_method'] == 'concat':
         proj_in_dim = config['latent_dim'] * 2
@@ -105,7 +103,16 @@ def main():
         logging.info(f"Epoch {epoch} started. Generating new training data...")
         subprocess.run(config['rust_cmd'], shell=True, check=True)
         logging.info("Data generation finished. Loading new training data...")
-
+        # 获得chunk_size和min_valid_timesteps
+        chunk_size = int(config['rust_cmd'].split("--chunk-size ")[1].split(" ")[0])
+        min_valid_timesteps = int(config['rust_cmd'].split("--min-valid-timesteps ")[1].split(" ")[0])
+        output_dir = config['rust_cmd'].split("--output-dir ")[1].split(" ")[0]
+        #获取output_dir下的aug1下的s1文件夹，并获取文件夹下的文件数量
+        files_per_epoch = len(os.listdir(os.path.join(output_dir, 'aug1', 's1')))
+        # 计算总步数
+        total_steps = math.ceil(files_per_epoch * chunk_size * config['epochs'] / config['batch_size'])
+        logging.info(f"Total steps = {total_steps}")
+        logging.info(f"Steps per epoch = {total_steps // config['epochs']}")
         dataset_train = HDF5Dataset_Multimodal_Tiles_Iterable(
             data_root=config['data_root'],
             min_valid_timesteps=config['min_valid_timesteps'],
@@ -195,12 +202,16 @@ def main():
                         plt.close(fig_cc)
                     except Exception:
                         pass
+                    finally:
+                        plt.close('all')
                     try:
                         fig_cc_repr = plot_cross_corr(repr1, repr2)
                         cross_corr_img_repr = wandb.Image(fig_cc_repr)
                         plt.close(fig_cc_repr)
                     except Exception:
                         pass
+                    finally:
+                        plt.close('all')
                 if cross_corr_img:
                     wandb_dict["cross_corr"] = cross_corr_img
                 if cross_corr_img_repr:
