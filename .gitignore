@@ -5,4 +5,4 @@ wandb/
 **/__pycache__/
 *.png
 log/
-training-data-preprocessing/training-data-preprocessing.sif
+*.sif
