@@ -5,6 +5,9 @@ import cv2  # 用于保存png图像
 
 def normalize_channel(channel):
     """对单个通道进行最小—最大归一化至 [0, 255]，返回 uint8 数组"""
+    if channel.size == 0:
+        # 如果通道为空，则返回与channel形状相同的全0数组
+        return np.zeros_like(channel, dtype=np.uint8)
     c_min = channel.min()
     c_max = channel.max()
     if c_max > c_min:
@@ -24,7 +27,7 @@ def process_rgb_patch(bands_data, masks_data, x, y, patch_size):
     masks_patch = masks_data[:, x: x+patch_size, y: y+patch_size]       # shape: (T, patch_size, patch_size)
     
     # 计算每个时间步有效（未被云雾遮挡）像素的数量
-    valid_counts = np.sum(masks_patch == 1, axis=(1,2))
+    valid_counts = np.sum(masks_patch == 1, axis=(1, 2))
     t_idx = np.argmax(valid_counts)
     
     # 取出该时间步的前三个波段（原始顺序为 [r, b, g]），并调整为 [r, g, b]
@@ -78,7 +81,6 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
     # 去除 target 数据多余的维度（如果有）
     if target_data.ndim == 3 and target_data.shape[0] == 1:
         target_data = target_data[0]
-    # 或者： target_data = np.squeeze(target_data)
     
     H, W, _ = rep_data.shape
     if target_data.shape != (H, W):

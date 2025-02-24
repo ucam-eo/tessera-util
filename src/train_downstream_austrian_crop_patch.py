@@ -324,7 +324,7 @@ def main():
     rep_files, target_files = get_file_lists(root_dir)
     
     (train_rep, train_target), (val_rep, val_target), (test_rep, test_target) = split_data(
-        rep_files, target_files, train_ratio=0.3, val_ratio=0.1, test_ratio=0.6)
+        rep_files, target_files, train_ratio=0.2, val_ratio=0.1, test_ratio=0.7)
     
     # 训练集可开启数据增强
     train_dataset = AustrianCropPatchDataset(train_rep, train_target, augment=True)
@@ -345,7 +345,7 @@ def main():
     print(f"Model has {num_params} parameters.")
     
     # 训练模型
-    train_model(model, train_loader, val_loader, device, num_classes, epochs=500, lr=1e-3)
+    train_model(model, train_loader, val_loader, device, num_classes, epochs=200, lr=1e-3)
     
     # 加载最佳 checkpoint 进行测试
     checkpoint_path = os.path.join("checkpoints", "downstream", "best_austriancrop_patch_seg_ckpt.pth")

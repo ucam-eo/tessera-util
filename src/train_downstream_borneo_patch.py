@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+import torch.nn.functional as F
 
 # 设置目标归一化参数（基于非 NaN 值计算得到）
 target_mean = 33.573902
@@ -133,6 +134,139 @@ class UNet(nn.Module):
         return self.final_conv(x)
 
 ####################################
+# 新增：最简单的卷积模型，用于回归任务（带下采样与上采样）
+####################################
+class SimpleConvNet(nn.Module):
+    def __init__(self, in_channels=128, out_channels=1, dropout_prob=0.2):
+        super(SimpleConvNet, self).__init__()
+        # Encoder: 下采样
+        self.encoder = nn.Sequential(
+            # Layer 1:
+            # Conv2d: 输入 (B, 128, H, W) -> 输出 (B, 256, H/2, W/2)
+            nn.Conv2d(in_channels, 256, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob),
+            # Layer 2:
+            # Conv2d: 输入 (B, 256, H/2, W/2) -> 输出 (B, 512, H/4, W/4)
+            nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob)
+        )
+        
+        # Decoder: 上采样恢复到原始尺寸
+        self.decoder = nn.Sequential(
+            # Layer 3:
+            # ConvTranspose2d: 输入 (B, 512, H/4, W/4) -> 输出 (B, 64, H/2, W/2)
+            nn.ConvTranspose2d(512, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob),
+            # Layer 4:
+            # ConvTranspose2d: 输入 (B, 64, H/2, W/2) -> 输出 (B, out_channels, H, W)
+            nn.ConvTranspose2d(64, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        )
+        
+    def forward(self, x):
+        # 输入 x: (B, in_channels, H, W)
+        x = self.encoder(x)  # 经过 encoder 后: (B, 128, H/4, W/4)
+        x = self.decoder(x)  # 经过 decoder 后: (B, out_channels, H, W)
+        return x
+
+####################################
+# MobileNetV3 部分：倒置残差块与特征提取器（修改后用于回归任务）
+####################################
+class InvertedResidual(nn.Module):
+    """
+    采用 MobileNetV3 风格的倒置残差块，包含 1x1 扩张、3x3 深度可分离卷积和 1x1 投影，
+    并在扩张和深度卷积后各加入 BatchNorm、ReLU 和 Dropout2d。
+    """
+    def __init__(self, in_channels, out_channels, stride, expand_ratio, dropout_prob=0.1):
+        super(InvertedResidual, self).__init__()
+        hidden_dim = int(round(in_channels * expand_ratio))
+        self.use_res_connect = (stride == 1 and in_channels == out_channels)
+        self.conv = nn.Sequential(
+            # 1x1 扩张卷积：将通道数从 in_channels 提升到 hidden_dim
+            nn.Conv2d(in_channels, hidden_dim, kernel_size=1, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob),
+            # 3x3 深度卷积：stride 控制下采样，padding=1 保持尺寸
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=stride, padding=1,
+                      groups=hidden_dim, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob),
+            # 1x1 投影卷积：将通道数压缩到 out_channels
+            nn.Conv2d(hidden_dim, out_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+        )
+    
+    def forward(self, x):
+        if self.use_res_connect:
+            return x + self.conv(x)
+        else:
+            return self.conv(x)
+
+class FeatureExtractorMobileNetV3(nn.Module):
+    """
+    特征提取器：输入形状 (B,128,64,64)
+    Encoder 部分逐步下采样并提高通道数：
+      1. initial_conv：使用 3x3 卷积将通道从 128 提升到 160，同时下采样 64x64->32x32
+      2. block1：倒置残差块，将 160 -> 192，stride=2，实现 32x32->16x16
+      3. block2：倒置残差块，将 192 -> 256，stride=2，实现 16x16->8x8
+      4. block3：倒置残差块，将 256 -> 320，stride=2，实现 8x8->4x4
+      5. final_conv：1x1 卷积将通道提升到 512，保持 4x4 尺寸
+    接下来通过上采样（scale_factor=16，将 4x4 放大到 64x64），再通过 decoder 将通道调整为 1。
+    """
+    def __init__(self, dropout_prob=0.1):
+        super(FeatureExtractorMobileNetV3, self).__init__()
+        # 初始卷积：保持信息同时提升通道
+        # 输入: (B,128,64,64) -> 输出: (B,160,32,32)
+        self.initial_conv = nn.Sequential(
+            nn.Conv2d(128, 160, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(160),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob)
+        )
+        # Block1：160 -> 192，下采样: (32,32) -> (16,16)
+        self.block1 = InvertedResidual(160, 192, stride=2, expand_ratio=2, dropout_prob=dropout_prob)
+        # Block2：192 -> 256，下采样: (16,16) -> (8,8)
+        # self.block2 = InvertedResidual(192, 256, stride=2, expand_ratio=2, dropout_prob=dropout_prob)
+        # # Block3：256 -> 320，下采样: (8,8) -> (4,4)
+        # self.block3 = InvertedResidual(256, 320, stride=2, expand_ratio=2, dropout_prob=dropout_prob)
+        # 最后 1x1 卷积：将通道提升到 512，保持尺寸 4x4
+        self.final_conv = nn.Sequential(
+            nn.Conv2d(192, 512, kernel_size=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob)
+        )
+        # Decoder：先上采样到原始尺寸，再将通道调整为 1
+        # 上采样：将 (B,512,4,4) 通过双线性插值放大到 (B,512,64,64)
+        # Decoder: 使用 3x3 卷积（BN+ReLU+Dropout）再 1x1 卷积映射到 1 通道
+        self.decoder = nn.Sequential(
+            nn.Conv2d(512, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout_prob),
+            nn.Conv2d(128, 1, kernel_size=1)
+        )
+    
+    def forward(self, x):
+        # 输入 x: (B,128,64,64)
+        x = self.initial_conv(x)   # -> (B,160,32,32)
+        x = self.block1(x)         # -> (B,192,16,16)
+        # x = self.block2(x)         # -> (B,256,8,8)
+        # x = self.block3(x)         # -> (B,320,4,4)
+        x = self.final_conv(x)     # -> (B,512,4,4)
+        # 上采样到 (B,512,64,64)
+        x = F.interpolate(x, scale_factor=4, mode='bilinear', align_corners=False)
+        x = self.decoder(x)        # -> (B,1,64,64)
+        return x
+
+####################################
 # 3. 数据集划分与 DataLoader
 ####################################
 def get_file_lists(root_dir):
@@ -230,11 +364,11 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=1e-3):
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}", leave=False)
         
         for batch_idx, (rep, target) in enumerate(progress_bar):
-            rep = rep.to(device)       # (B, 128, 100, 100)
-            target = target.to(device) # (B, 1, 100, 100) 其中部分像素可能为 NaN
+            rep = rep.to(device)       # (B, 128, 64, 64)
+            target = target.to(device) # (B, 1, 64, 64) 其中部分像素可能为 NaN
             
             optimizer.zero_grad()
-            output = model(rep)        # (B, 1, 100, 100)
+            output = model(rep)        # 输出应为 (B, 1, 64, 64)
             loss = masked_mse_loss(output, target)
             loss.backward()
             optimizer.step()
@@ -306,7 +440,11 @@ def main():
     
     # 模型与设备设置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = UNet(in_channels=128, out_channels=1)
+    # 使用 UNet 模型
+    # model = UNet(in_channels=128, out_channels=1)
+    # 使用新的最简单的卷积模型
+    model = SimpleConvNet(in_channels=128, out_channels=1)
+    # model = FeatureExtractorMobileNetV3(dropout_prob=0.1)
     
     # 打印模型参数个数
     num_params = sum(p.numel() for p in model.parameters())

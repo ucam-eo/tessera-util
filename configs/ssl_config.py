@@ -35,11 +35,11 @@ config = {
     "total_samples": 31000000,
     "rust_cmd": (
         "RUST_LOG=debug src/utils/training-data-preprocessing "
-        "--data-root data/ssl_training/global_temp "
+        "--data-root data/ssl_training/global "
         "--output-dir data/ssl_training/ready_to_use "
-        "--tile-batch 20 "
+        "--tile-batch 30 "
         "--time-steps 20 "
-        "--chunk-size 10000 "
+        "--chunk-size 1000000 "
         "--min-valid-timesteps 20"
     )
 }

@@ -127,6 +127,8 @@ class SpectralTemporalTransformer(nn.Module):
                  data_dim, 
                  time_dim=2, 
                  latent_dim=128,
+                 nhead=8,
+                 num_layers=16,
                  fusion_method='concat',
                  **kwargs):
         super().__init__()
@@ -136,8 +138,8 @@ class SpectralTemporalTransformer(nn.Module):
             input_dim=data_dim-2,
             latent_dim=latent_dim,
             dim_feedforward=512,
-            nhead=8,
-            num_layers=16,
+            nhead=nhead,
+            num_layers=num_layers,
             **kwargs
         )
         self.time_transformer = SingleModalityTransformer(
@@ -145,7 +147,7 @@ class SpectralTemporalTransformer(nn.Module):
             latent_dim=latent_dim,
             dim_feedforward=256,
             nhead=4,
-            num_layers=2,
+            num_layers=4,
             **kwargs
         )
         # 如果要 concat

@@ -21,6 +21,7 @@ from models.ssl_model import MultimodalBTModel, BarlowTwinsLoss, compute_cross_c
 from utils.lr_scheduler import adjust_learning_rate
 from utils.metrics import linear_probe_evaluate, rankme
 from utils.misc import remove_dir, save_checkpoint, plot_cross_corr
+import matplotlib.pyplot as plt
 
 def parse_args():
     parser = argparse.ArgumentParser(description="SSL Training")
@@ -65,8 +66,8 @@ def main():
     #     dropout=0.1,
     #     max_seq_len=config['sample_size_s1']
     # ).to(device)
-    s2_enc = SpectralTemporalTransformer(data_dim=12).to(device)
-    s1_enc = SpectralTemporalTransformer(data_dim=4).to(device)
+    s2_enc = SpectralTemporalTransformer(data_dim=12, nhead=16, num_layers=32).to(device)
+    s1_enc = SpectralTemporalTransformer(data_dim=4, nhead=16, num_layers=32).to(device)
     
     if config['fusion_method'] == 'concat':
         proj_in_dim = config['latent_dim'] * 2
@@ -94,17 +95,19 @@ def main():
     rolling_loss = []
     rolling_size = 40
     best_val_acc = 0.0
-    best_ckpt_path = os.path.join("checkpoints", "ssl", "best_model.pt")
+    # 获取时间戳
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_{timestamp}.pth")
 
     for epoch in range(config['epochs']):
         # 生成新数据：删除旧数据并调用rust命令生成新数据
-        aug1_dir = os.path.join(config['data_root'], 'aug1')
-        aug2_dir = os.path.join(config['data_root'], 'aug2')
-        remove_dir(aug1_dir)
-        remove_dir(aug2_dir)
-        logging.info(f"Epoch {epoch} started. Generating new training data...")
-        subprocess.run(config['rust_cmd'], shell=True, check=True)
-        logging.info("Data generation finished. Loading new training data...")
+        # aug1_dir = os.path.join(config['data_root'], 'aug1')
+        # aug2_dir = os.path.join(config['data_root'], 'aug2')
+        # remove_dir(aug1_dir)
+        # remove_dir(aug2_dir)
+        # logging.info(f"Epoch {epoch} started. Generating new training data...")
+        # subprocess.run(config['rust_cmd'], shell=True, check=True)
+        # logging.info("Data generation finished. Loading new training data...")
 
         dataset_train = HDF5Dataset_Multimodal_Tiles_Iterable(
             data_root=config['data_root'],

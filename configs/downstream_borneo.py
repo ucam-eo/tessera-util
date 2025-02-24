@@ -16,7 +16,7 @@ config = {
     "chm_path": "data/downstream/borneo/Danum_2020_chm_lspikefree_subsampled.npy",
     
     # 数据拆分比例：训练集占总样本 50%，剩余 50%中按比例分配验证和测试（例如 1/7 为验证，其余为测试）
-    "train_ratio": 0.5,
+    "train_ratio": 0.3,
     "val_ratio": 1/7,  # 剩余部分中验证所占比例
     
     # 训练超参数

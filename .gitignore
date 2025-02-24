@@ -3,3 +3,4 @@ logs/
 data/
 wandb/
 **/__pycache__/
+*.png

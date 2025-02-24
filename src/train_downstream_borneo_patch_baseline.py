@@ -223,7 +223,7 @@ def train_model(model, train_loader, val_loader, device, epochs=50, lr=1e-3):
     best_val_loss = float('inf')
     checkpoint_dir = os.path.join("checkpoints", "downstream")
     os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(checkpoint_dir, "best_borneo_patch_ckpt.pth")
+    checkpoint_path = os.path.join(checkpoint_dir, "best_borneo_patch_ckpt_baseline.pth")
     
     for epoch in range(1, epochs+1):
         model.train()
@@ -293,7 +293,7 @@ def main():
     rgb_files, target_files = get_file_lists(root_dir)
     
     (train_rgb, train_target), (val_rgb, val_target), (test_rgb, test_target) = split_data(
-        rgb_files, target_files, train_ratio=0.3, val_ratio=0.1, test_ratio=0.6)
+        rgb_files, target_files, train_ratio=0.01, val_ratio=0.1, test_ratio=0.89)
     
     # 创建数据集与 DataLoader
     train_dataset = BorneoRGBDataset(train_rgb, train_target)
@@ -317,7 +317,7 @@ def main():
     train_model(model, train_loader, val_loader, device, epochs=200, lr=1e-3)
     
     # 加载最佳的checkpoint再进行测试
-    checkpoint_path = os.path.join("checkpoints", "downstream", "best_borneo_patch_ckpt.pth")
+    checkpoint_path = os.path.join("checkpoints", "downstream", "best_borneo_patch_ckpt_baseline.pth")
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
