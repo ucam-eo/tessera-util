@@ -1,0 +1,741 @@
+Loading default-dawn
+  Loading requirement: dawn-env/2023-12-22 dawn-env/2024-04-15
+    dawn-env/2024-12-01 rhel8/global rhel8/slurm
+Loading intel-oneapi-mpi/2021.14.1/oneapi/6qxeyc5c
+  Loading requirement: glibc/2.28/gcc/olqvxojx
+Loading intel-oneapi-compilers/2025.0.4/gcc/umo7dwbo
+  Loading requirement: gcc-runtime/14.2.0/gcc/w62p4k2j
+    zlib-ng/2.2.1/gcc/driavgwo zstd/1.5.6/gcc/vspjj6g4
+    binutils/2.43.1/gcc/ohtm4il2
+[W224 23:07:11.224595431 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.224603497 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.237519311 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.256558892 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.265300512 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.429416993 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.584776985 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:07:11.681720782 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+2025-02-24 23:07:14,490 - root - INFO - Running on 8 XPU(s). LocalRank=0, device=xpu:0
+2025-02-24 23:07:14,490 - root - INFO - chunk_batch = 40
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+wandb: Currently logged in as: frankfeng1223. Use `wandb login --relogin` to force relogin
+wandb: Using wandb-core as the SDK backend.  Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.19.2
+wandb: Run data is saved locally in /rds/user/zf281/hpc-work/Files/btfm4rs/wandb/run-20250224_230714-xp6fk8o1
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run BT_Iter_20250224_230714
+wandb: ⭐️ View project at https://wandb.ai/frankfeng1223/btfm-iterable
+wandb: 🚀 View run at https://wandb.ai/frankfeng1223/btfm-iterable/runs/xp6fk8o1
+2025-02-24 23:07:15,596 - root - INFO - Total steps (approx) = 908203
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+2025-02-24 23:07:15,894 - root - INFO - Model has 13092866 trainable parameters.
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+2025-02-24 23:07:34,320 - root - INFO - Removed directory: data/ssl_training/ready_to_use/aug1
+2025-02-24 23:07:39,502 - root - INFO - Removed directory: data/ssl_training/ready_to_use/aug2
+2025-02-24 23:07:39,502 - root - INFO - Epoch 0 started. Generating new training data via rust_cmd...
+[2025-02-24T23:07:40Z INFO  training_data_preprocessing] === training-data-preprocessing start ===
+[2025-02-24T23:07:40Z INFO  training_data_preprocessing] Parsed command-line args: Args { data_root: "/home/zf281/rds/hpc-work/Files/btfm/data/global", min_valid_timesteps: 20, time_steps: 20, tile_batch: 60, output_dir: "data/ssl_training/ready_to_use", chunk_size: 1000000 }
+[2025-02-24T23:07:40Z INFO  training_data_preprocessing] Creating output directories under "data/ssl_training/ready_to_use"
+[2025-02-24T23:07:40Z INFO  training_data_preprocessing] Scanning tiles under data_root="/home/zf281/rds/hpc-work/Files/btfm/data/global"
+[2025-02-24T23:07:53Z INFO  training_data_preprocessing] Found 120 tile subfolders in "/home/zf281/rds/hpc-work/Files/btfm/data/global"
+[2025-02-24T23:07:53Z INFO  training_data_preprocessing] ==== [Batch #1] => tile indices in range [0, 60) ====
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=10UDB
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=16SEJ
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=14RNV
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=12UXV
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=11TLK
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=14QKG
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=19VEC
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=29PNR
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=19JCH
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=17SPV
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=17UPS
+[2025-02-24T23:07:53Z DEBUG training_data_preprocessing] process_tile() start => tile=21UUV
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=17UPS, s2_bands shape=(74,549,549,10)
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=16SEJ, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=17UPS, found 0 valid pixels
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] process_tile() start => tile=18FXL
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=14QKG, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=16SEJ, found 301373 valid pixels
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=14RNV, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:07:54Z DEBUG training_data_preprocessing] tile=11TLK, s2_bands shape=(78,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=19VEC, s2_bands shape=(140,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=14QKG, found 301283 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=14RNV, found 301246 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=29PNR, s2_bands shape=(145,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=19JCH, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=11TLK, found 300975 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=19JCH, found 0 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] process_tile() start => tile=19KGU
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=21UUV, s2_bands shape=(146,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=12UXV, s2_bands shape=(143,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=17SPV, s2_bands shape=(74,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=29PNR, found 301401 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=19VEC, found 301085 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=10UDB, s2_bands shape=(145,549,549,10)
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=17SPV, found 301393 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=12UXV, found 301401 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=21UUV, found 301383 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=10UDB, found 297599 valid pixels
+[2025-02-24T23:07:55Z DEBUG training_data_preprocessing] tile=18FXL, s2_bands shape=(142,549,549,10)
+[2025-02-24T23:07:56Z DEBUG training_data_preprocessing] tile=18FXL, found 291942 valid pixels
+[2025-02-24T23:07:56Z DEBUG training_data_preprocessing] tile=19KGU, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:07:56Z DEBUG training_data_preprocessing] tile=19KGU, found 273298 valid pixels
+[2025-02-24T23:07:59Z DEBUG training_data_preprocessing] process_tile() start => tile=17MQS
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] process_tile() start => tile=14SKD
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] process_tile() start => tile=12RWT
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] process_tile() start => tile=29PQR
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] process_tile() start => tile=14QQD
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] tile=17MQS, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] tile=17MQS, found 87944 valid pixels
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] process_tile() start => tile=17TPF
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] process_tile() start => tile=20LNN
+[2025-02-24T23:08:00Z DEBUG training_data_preprocessing] tile=29PQR, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=29PQR, found 301401 valid pixels
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] process_tile() start => tile=19PEN
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] process_tile() start => tile=13TFH
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=14SKD, s2_bands shape=(105,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] process_tile() start => tile=22KGV
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] process_tile() start => tile=30PXU
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=14QQD, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=14SKD, found 301401 valid pixels
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=14QQD, found 301388 valid pixels
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] process_tile() start => tile=18MTU
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=12RWT, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=12RWT, found 301344 valid pixels
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=20LNN, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=30PXU, s2_bands shape=(74,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] tile=19PEN, s2_bands shape=(74,549,549,10)
+[2025-02-24T23:08:01Z DEBUG training_data_preprocessing] process_tile() start => tile=17SMA
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=20LNN, found 301238 valid pixels
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=30PXU, found 266057 valid pixels
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=22KGV, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=19PEN, found 283046 valid pixels
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=17TPF, s2_bands shape=(147,549,549,10)
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=22KGV, found 271961 valid pixels
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=17TPF, found 301208 valid pixels
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=13TFH, s2_bands shape=(132,549,549,10)
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=18MTU, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=13TFH, found 301401 valid pixels
+[2025-02-24T23:08:02Z DEBUG training_data_preprocessing] tile=18MTU, found 156916 valid pixels
+[2025-02-24T23:08:03Z DEBUG training_data_preprocessing] tile=17SMA, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:03Z DEBUG training_data_preprocessing] tile=17SMA, found 301046 valid pixels
+[2025-02-24T23:08:04Z DEBUG training_data_preprocessing] process_tile() start => tile=29QNB
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] process_tile() start => tile=18MUV
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] tile=29QNB, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] process_tile() start => tile=30PYU
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] process_tile() start => tile=15TTG
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] tile=29QNB, found 971 valid pixels
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] process_tile() start => tile=29QQV
+[2025-02-24T23:08:05Z DEBUG training_data_preprocessing] process_tile() start => tile=22MCC
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=18MUV, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] process_tile() start => tile=14UMV
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] process_tile() start => tile=19QCB
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=18MUV, found 294938 valid pixels
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] process_tile() start => tile=19UDV
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] process_tile() start => tile=20MKV
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] process_tile() start => tile=17ULP
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=29QQV, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=30PYU, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=29QQV, found 301303 valid pixels
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=19QCB, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:06Z DEBUG training_data_preprocessing] tile=30PYU, found 300763 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=14UMV, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=15TTG, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=19QCB, found 272246 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=22MCC, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=14UMV, found 301401 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=15TTG, found 301297 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=17ULP, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=20MKV, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=22MCC, found 213220 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=17ULP, found 285556 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=20MKV, found 279591 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=19UDV, s2_bands shape=(138,549,549,10)
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] tile=19UDV, found 283935 valid pixels
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] process_tile() start => tile=19TCK
+[2025-02-24T23:08:07Z DEBUG training_data_preprocessing] process_tile() start => tile=19UFR
+[2025-02-24T23:08:08Z DEBUG training_data_preprocessing] tile=19UFR, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:08Z DEBUG training_data_preprocessing] tile=19UFR, found 296298 valid pixels
+[2025-02-24T23:08:09Z DEBUG training_data_preprocessing] tile=19TCK, s2_bands shape=(136,549,549,10)
+[2025-02-24T23:08:09Z DEBUG training_data_preprocessing] tile=19TCK, found 283765 valid pixels
+[2025-02-24T23:08:10Z DEBUG training_data_preprocessing] process_tile() start => tile=22MFA
+[2025-02-24T23:08:10Z DEBUG training_data_preprocessing] process_tile() start => tile=18NWH
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] process_tile() start => tile=30QTD
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] process_tile() start => tile=17ULQ
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] tile=22MFA, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] process_tile() start => tile=20MPV
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] process_tile() start => tile=20NNJ
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] tile=22MFA, found 290061 valid pixels
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] process_tile() start => tile=15RVP
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] process_tile() start => tile=16SDH
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] tile=18NWH, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:11Z DEBUG training_data_preprocessing] tile=18NWH, found 278888 valid pixels
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] process_tile() start => tile=16SDJ
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=30QTD, s2_bands shape=(145,549,549,10)
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=17ULQ, s2_bands shape=(143,549,549,10)
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=15RVP, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] process_tile() start => tile=18PWT
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=20NNJ, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=17ULQ, found 294986 valid pixels
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=15RVP, found 301390 valid pixels
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=20MPV, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=30QTD, found 301401 valid pixels
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=20NNJ, found 102202 valid pixels
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] process_tile() start => tile=19FCD
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=16SDH, s2_bands shape=(142,549,549,10)
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=20MPV, found 301181 valid pixels
+[2025-02-24T23:08:12Z DEBUG training_data_preprocessing] tile=16SDH, found 301395 valid pixels
+[2025-02-24T23:08:13Z DEBUG training_data_preprocessing] tile=16SDJ, s2_bands shape=(145,549,549,10)
+[2025-02-24T23:08:13Z DEBUG training_data_preprocessing] tile=18PWT, s2_bands shape=(143,549,549,10)
+[2025-02-24T23:08:13Z DEBUG training_data_preprocessing] tile=16SDJ, found 301381 valid pixels
+[2025-02-24T23:08:13Z DEBUG training_data_preprocessing] tile=18PWT, found 298624 valid pixels
+[2025-02-24T23:08:13Z DEBUG training_data_preprocessing] tile=19FCD, s2_bands shape=(138,549,549,10)
+[2025-02-24T23:08:14Z DEBUG training_data_preprocessing] tile=19FCD, found 301353 valid pixels
+[2025-02-24T23:08:14Z DEBUG training_data_preprocessing] process_tile() start => tile=20UPE
+[2025-02-24T23:08:14Z DEBUG training_data_preprocessing] process_tile() start => tile=31TEL
+[2025-02-24T23:08:15Z DEBUG training_data_preprocessing] tile=20UPE, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:15Z DEBUG training_data_preprocessing] process_tile() start => tile=18NXJ
+[2025-02-24T23:08:15Z DEBUG training_data_preprocessing] tile=20UPE, found 301318 valid pixels
+[2025-02-24T23:08:15Z DEBUG training_data_preprocessing] process_tile() start => tile=23LLG
+[2025-02-24T23:08:15Z DEBUG training_data_preprocessing] tile=31TEL, s2_bands shape=(141,549,549,10)
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] tile=31TEL, found 301342 valid pixels
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] process_tile() start => tile=21MWR
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] tile=18NXJ, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] tile=23LLG, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] tile=18NXJ, found 215833 valid pixels
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] tile=23LLG, found 301256 valid pixels
+[2025-02-24T23:08:16Z DEBUG training_data_preprocessing] process_tile() start => tile=16SEA
+[2025-02-24T23:08:17Z DEBUG training_data_preprocessing] process_tile() start => tile=21NYD
+[2025-02-24T23:08:17Z DEBUG training_data_preprocessing] tile=21MWR, s2_bands shape=(74,549,549,10)
+[2025-02-24T23:08:17Z DEBUG training_data_preprocessing] tile=21MWR, found 297800 valid pixels
+[2025-02-24T23:08:17Z DEBUG training_data_preprocessing] tile=16SEA, s2_bands shape=(77,549,549,10)
+[2025-02-24T23:08:17Z DEBUG training_data_preprocessing] tile=16SEA, found 301370 valid pixels
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] process_tile() start => tile=28PFT
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] process_tile() start => tile=29PLS
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] tile=21NYD, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] tile=21NYD, found 108406 valid pixels
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] tile=29PLS, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] tile=28PFT, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] tile=29PLS, found 297804 valid pixels
+[2025-02-24T23:08:18Z DEBUG training_data_preprocessing] tile=28PFT, found 301398 valid pixels
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #1 => got 297599 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #2 => got 300975 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #3 => got 301344 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #4 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #5 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #6 => got 301283 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #7 => got 301388 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #8 => got 301246 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #9 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #10 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #11 => got 301390 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #12 => got 301297 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #13 => got 301395 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #14 => got 301381 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #15 => got 301370 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #16 => got 301373 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #17 => got 87944 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #18 => got 301046 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #19 => got 301393 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #20 => got 301208 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #21 => got 285556 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #22 => got 294986 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #23 => got 0 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #24 => got 291942 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #25 => got 156916 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #26 => got 294938 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #27 => got 278888 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #28 => got 215833 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #29 => got 298624 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #30 => got 301353 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #31 => got 0 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #32 => got 273298 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #33 => got 283046 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #34 => got 272246 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #35 => got 283765 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #36 => got 283935 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #37 => got 296298 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #38 => got 301085 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #39 => got 301238 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #40 => got 279591 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #41 => got 301181 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #42 => got 102202 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #43 => got 301318 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #44 => got 297800 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #45 => got 108406 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #46 => got 301383 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #47 => got 271961 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #48 => got 213220 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #49 => got 290061 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #50 => got 301256 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #51 => got 301398 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #52 => got 297804 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #53 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #54 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #55 => got 971 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #56 => got 301303 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #57 => got 266057 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #58 => got 300763 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #59 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:20Z INFO  training_data_preprocessing] Tile #60 => got 301342 valid px => accumulate..
+[2025-02-24T23:08:22Z INFO  training_data_preprocessing] [Batch #1] => done merging => total valid px=15965403, shape s2_a1=(15965403, 20, 12)
+[2025-02-24T23:08:23Z INFO  training_data_preprocessing] [Batch #1] => shuffled all pixels
+[2025-02-24T23:08:23Z INFO  training_data_preprocessing] [Batch #1] => starting parallel write of 15 chunks
+[2025-02-24T23:08:26Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #4 with 1000000 pixels
+[2025-02-24T23:08:26Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #11 with 1000000 pixels
+[2025-02-24T23:08:26Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #3 with 1000000 pixels
+[2025-02-24T23:08:26Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #8 with 1000000 pixels
+[2025-02-24T23:08:26Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #10 with 1000000 pixels
+[2025-02-24T23:08:26Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #9 with 1000000 pixels
+[2025-02-24T23:08:27Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #14 with 1000000 pixels
+[2025-02-24T23:08:27Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #6 with 1000000 pixels
+[2025-02-24T23:08:27Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #2 with 1000000 pixels
+[2025-02-24T23:08:27Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #1 with 1000000 pixels
+[2025-02-24T23:08:27Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #12 with 1000000 pixels
+[2025-02-24T23:08:27Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #5 with 1000000 pixels
+[2025-02-24T23:08:29Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #13 with 1000000 pixels
+[2025-02-24T23:08:29Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #7 with 1000000 pixels
+[2025-02-24T23:08:29Z INFO  training_data_preprocessing] [Batch #1] => wrote chunk file #15 with 1000000 pixels
+[2025-02-24T23:08:34Z INFO  training_data_preprocessing] ==== [Batch #2] => tile indices in range [60, 120) ====
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=32NPM
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=39LUE
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=34UDU
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=34JER
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=35NKA
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=37TDK
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=35VPF
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=34MFA
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=35LQD
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=32PNQ
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=33MWN
+[2025-02-24T23:08:34Z DEBUG training_data_preprocessing] process_tile() start => tile=48NTF
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=34MFA, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=32NPM, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=35NKA, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=48NTF, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=34MFA, found 288511 valid pixels
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=39LUE, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=33MWN, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=34JER, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=32NPM, found 296732 valid pixels
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=35NKA, found 301326 valid pixels
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=35LQD, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=48NTF, found 251296 valid pixels
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=32PNQ, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=33MWN, found 301155 valid pixels
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=39LUE, found 256484 valid pixels
+[2025-02-24T23:08:35Z DEBUG training_data_preprocessing] tile=34JER, found 301319 valid pixels
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=35LQD, found 0 valid pixels
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] process_tile() start => tile=35LQL
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=32PNQ, found 301215 valid pixels
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=34UDU, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=34UDU, found 299837 valid pixels
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=37TDK, s2_bands shape=(146,549,549,10)
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=35VPF, s2_bands shape=(136,549,549,10)
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] process_tile() start => tile=34PGU
+[2025-02-24T23:08:36Z DEBUG training_data_preprocessing] tile=37TDK, found 301372 valid pixels
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] tile=35LQL, s2_bands shape=(140,549,549,10)
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] tile=35VPF, found 301401 valid pixels
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=48QWK
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] tile=35LQL, found 300293 valid pixels
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=36MWB
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=34MBV
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=32SNF
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] tile=34PGU, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=42SWD
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] tile=34PGU, found 300287 valid pixels
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=33NYC
+[2025-02-24T23:08:37Z DEBUG training_data_preprocessing] process_tile() start => tile=35UPV
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=34MBV, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] process_tile() start => tile=34UEB
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=36MWB, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=34MBV, found 301233 valid pixels
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=36MWB, found 299200 valid pixels
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=48QWK, s2_bands shape=(77,549,549,10)
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=48QWK, found 68770 valid pixels
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] process_tile() start => tile=44RLP
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] tile=34UEB, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:38Z DEBUG training_data_preprocessing] process_tile() start => tile=37TEJ
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] process_tile() start => tile=48SUB
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] tile=34UEB, found 295404 valid pixels
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] tile=32SNF, s2_bands shape=(143,549,549,10)
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] process_tile() start => tile=47PNN
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] tile=32SNF, found 301401 valid pixels
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] tile=44RLP, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] process_tile() start => tile=36KTG
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] tile=44RLP, found 301199 valid pixels
+[2025-02-24T23:08:39Z DEBUG training_data_preprocessing] process_tile() start => tile=37MCR
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=35UPV, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=42SWD, s2_bands shape=(145,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=33NYC, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=35UPV, found 301361 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=47PNN, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] process_tile() start => tile=47SKU
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=33NYC, found 301398 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=48SUB, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=36KTG, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=37TEJ, s2_bands shape=(137,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=47PNN, found 273741 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=42SWD, found 300874 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=37MCR, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=36KTG, found 0 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] process_tile() start => tile=48MTB
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=48SUB, found 284063 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=37MCR, found 223572 valid pixels
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] process_tile() start => tile=35VLF
+[2025-02-24T23:08:40Z DEBUG training_data_preprocessing] tile=37TEJ, found 300578 valid pixels
+[2025-02-24T23:08:41Z DEBUG training_data_preprocessing] tile=47SKU, s2_bands shape=(75,549,549,10)
+[2025-02-24T23:08:41Z DEBUG training_data_preprocessing] tile=48MTB, s2_bands shape=(69,549,549,10)
+[2025-02-24T23:08:41Z DEBUG training_data_preprocessing] tile=48MTB, found 169690 valid pixels
+[2025-02-24T23:08:41Z DEBUG training_data_preprocessing] tile=47SKU, found 301380 valid pixels
+[2025-02-24T23:08:41Z DEBUG training_data_preprocessing] process_tile() start => tile=45RXN
+[2025-02-24T23:08:41Z DEBUG training_data_preprocessing] process_tile() start => tile=33TUL
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=47RNK
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] tile=35VLF, s2_bands shape=(140,549,549,10)
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=33UXS
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=49MFM
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=45SVT
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] tile=35VLF, found 301401 valid pixels
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=42TUL
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] tile=45RXN, s2_bands shape=(143,549,549,10)
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=38SND
+[2025-02-24T23:08:42Z DEBUG training_data_preprocessing] process_tile() start => tile=38VLH
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=47RNK, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=45SVT, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=33TUL, s2_bands shape=(145,549,549,10)
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=45RXN, found 301193 valid pixels
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=47RNK, found 289827 valid pixels
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=45SVT, found 301327 valid pixels
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=49MFM, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=33TUL, found 301394 valid pixels
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] process_tile() start => tile=37UDT
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] process_tile() start => tile=38PLQ
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=49MFM, found 224258 valid pixels
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=38SND, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=33UXS, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=38SND, found 301358 valid pixels
+[2025-02-24T23:08:43Z DEBUG training_data_preprocessing] tile=42TUL, s2_bands shape=(142,549,549,10)
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=33UXS, found 300778 valid pixels
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=42TUL, found 301400 valid pixels
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=38VLH, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=38PLQ, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] process_tile() start => tile=45TXJ
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=38VLH, found 301193 valid pixels
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=38PLQ, found 301283 valid pixels
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=37UDT, s2_bands shape=(147,549,549,10)
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] process_tile() start => tile=38TLN
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] process_tile() start => tile=49RDL
+[2025-02-24T23:08:44Z DEBUG training_data_preprocessing] tile=37UDT, found 301401 valid pixels
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] process_tile() start => tile=43QGF
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] tile=45TXJ, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] process_tile() start => tile=44QQE
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] tile=45TXJ, found 291639 valid pixels
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] tile=38TLN, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] process_tile() start => tile=44RLN
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] process_tile() start => tile=50SKF
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] process_tile() start => tile=39KTU
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] tile=49RDL, s2_bands shape=(141,549,549,10)
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] tile=38TLN, found 287680 valid pixels
+[2025-02-24T23:08:45Z DEBUG training_data_preprocessing] tile=43QGF, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=43QGF, found 301249 valid pixels
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=44QQE, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=49RDL, found 270437 valid pixels
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] process_tile() start => tile=50NNJ
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=44QQE, found 296543 valid pixels
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] process_tile() start => tile=54KWD
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] process_tile() start => tile=53SLU
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=44RLN, s2_bands shape=(93,549,549,10)
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=50SKF, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=39KTU, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=44RLN, found 265301 valid pixels
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=50SKF, found 300513 valid pixels
+[2025-02-24T23:08:46Z DEBUG training_data_preprocessing] tile=39KTU, found 244027 valid pixels
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] process_tile() start => tile=43SDA
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] tile=54KWD, s2_bands shape=(69,549,549,10)
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] tile=54KWD, found 301401 valid pixels
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] process_tile() start => tile=52LGJ
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] process_tile() start => tile=55JBG
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] tile=50NNJ, s2_bands shape=(144,549,549,10)
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] tile=50NNJ, found 202705 valid pixels
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] process_tile() start => tile=50RPN
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] tile=53SLU, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:47Z DEBUG training_data_preprocessing] tile=53SLU, found 300947 valid pixels
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=55JBG, s2_bands shape=(72,549,549,10)
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=43SDA, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] process_tile() start => tile=55JDL
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] process_tile() start => tile=55HFD
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] process_tile() start => tile=53SNT
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=55JBG, found 301293 valid pixels
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=43SDA, found 281198 valid pixels
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=52LGJ, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=53SNT, s2_bands shape=(71,549,549,10)
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=52LGJ, found 273700 valid pixels
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=55HFD, s2_bands shape=(69,549,549,10)
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=53SNT, found 279803 valid pixels
+[2025-02-24T23:08:48Z DEBUG training_data_preprocessing] tile=50RPN, s2_bands shape=(73,549,549,10)
+[2025-02-24T23:08:49Z DEBUG training_data_preprocessing] tile=55HFD, found 301316 valid pixels
+[2025-02-24T23:08:49Z DEBUG training_data_preprocessing] tile=50RPN, found 301159 valid pixels
+[2025-02-24T23:08:49Z DEBUG training_data_preprocessing] tile=55JDL, s2_bands shape=(70,549,549,10)
+[2025-02-24T23:08:49Z DEBUG training_data_preprocessing] tile=55JDL, found 301401 valid pixels
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #1 => got 296732 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #2 => got 301215 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #3 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #4 => got 301155 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #5 => got 301398 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #6 => got 301394 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #7 => got 300778 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #8 => got 301319 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #9 => got 301233 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #10 => got 288511 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #11 => got 300287 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #12 => got 299837 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #13 => got 295404 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #14 => got 0 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #15 => got 300293 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #16 => got 301326 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #17 => got 301361 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #18 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #19 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #20 => got 0 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #21 => got 299200 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #22 => got 223572 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #23 => got 301372 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #24 => got 300578 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #25 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #26 => got 301283 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #27 => got 301358 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #28 => got 287680 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #29 => got 301193 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #30 => got 244027 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #31 => got 256484 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #32 => got 300874 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #33 => got 301400 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #34 => got 301249 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #35 => got 281198 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #36 => got 296543 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #37 => got 265301 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #38 => got 301199 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #39 => got 301193 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #40 => got 301327 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #41 => got 291639 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #42 => got 273741 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #43 => got 289827 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #44 => got 301380 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #45 => got 169690 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #46 => got 251296 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #47 => got 68770 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #48 => got 284063 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #49 => got 224258 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #50 => got 270437 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #51 => got 202705 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #52 => got 301159 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #53 => got 300513 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #54 => got 273700 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #55 => got 300947 valid px => accumulate..
+[2025-02-24T23:08:50Z INFO  training_data_preprocessing] Tile #56 => got 279803 valid px => accumulate..
+[2025-02-24T23:08:51Z INFO  training_data_preprocessing] Tile #57 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:51Z INFO  training_data_preprocessing] Tile #58 => got 301316 valid px => accumulate..
+[2025-02-24T23:08:51Z INFO  training_data_preprocessing] Tile #59 => got 301293 valid px => accumulate..
+[2025-02-24T23:08:51Z INFO  training_data_preprocessing] Tile #60 => got 301401 valid px => accumulate..
+[2025-02-24T23:08:52Z INFO  training_data_preprocessing] [Batch #2] => done merging => total valid px=16454217, shape s2_a1=(16454217, 20, 12)
+[2025-02-24T23:08:54Z INFO  training_data_preprocessing] [Batch #2] => shuffled all pixels
+[2025-02-24T23:08:54Z INFO  training_data_preprocessing] [Batch #2] => starting parallel write of 16 chunks
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #13 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #6 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #7 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #5 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #9 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #8 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #4 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #11 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #1 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #10 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #2 with 1000000 pixels
+[2025-02-24T23:08:57Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #3 with 1000000 pixels
+[2025-02-24T23:08:59Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #16 with 1000000 pixels
+[2025-02-24T23:08:59Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #15 with 1000000 pixels
+[2025-02-24T23:08:59Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #12 with 1000000 pixels
+[2025-02-24T23:09:00Z INFO  training_data_preprocessing] [Batch #2] => wrote chunk file #14 with 1000000 pixels
+[2025-02-24T23:09:05Z INFO  training_data_preprocessing] === Done. Check your output_dir for files. ===
+2025-02-24 23:09:06,847 - root - INFO - Data generation finished for epoch 0.
+2025-02-24 23:09:06,850 - root - INFO - Epoch 0: total new files = 31 in each folder
+2025-02-24 23:09:06,851 - root - INFO - Epoch 0, chunk [0:31], loading 31 files...
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+2025-02-24 23:09:54,810 - root - INFO -    => This chunk has 31000000 samples total, steps in dataloader = 3784.
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+[rank1]:[W224 23:10:08.462849500 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank7]:[W224 23:10:08.462820222 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank0]:[W224 23:10:08.462879300 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank2]:[W224 23:10:08.462843133 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank4]:[W224 23:10:08.462906432 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank5]:[W224 23:10:08.463018167 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank6]:[W224 23:10:08.462854527 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank3]:[W224 23:10:08.462942075 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/utils/metrics.py:13: UserWarning: Aten Op fallback from XPU to CPU happends. This may have performance implications. If need debug the fallback ops please set environment variable `PYTORCH_DEBUG_XPU_FALLBACK=1`  (Triggered internally at /build/pytorch/build/aten/src/ATen/xpu/RegisterXPU.cpp:7614.)
+  s = z.svd(compute_uv=False)[1]
+2025-02-24 23:10:46,945 - root - INFO - [Epoch=0, Step=0] Loss=304.70, MixLoss=10.45, AvgLoss=304.70, LR=0.0000, batchsize=1024, Examples/sec=5.21, Rank(z)=0.8487, Rank(repr)=0.5136
+2025-02-24 23:11:00,090 - root - INFO - [Epoch=0, Step=10] Loss=307.44, MixLoss=9.76, AvgLoss=306.07, LR=0.0000, batchsize=1024, Examples/sec=638.78, Rank(z)=0.8500, Rank(repr)=0.5134
+2025-02-24 23:11:08,294 - root - INFO - [Epoch=0, Step=20] Loss=303.90, MixLoss=11.32, AvgLoss=305.35, LR=0.0000, batchsize=1024, Examples/sec=1248.73, Rank(z)=0.8491, Rank(repr)=0.5129
+2025-02-24 23:11:16,503 - root - INFO - [Epoch=0, Step=30] Loss=293.88, MixLoss=5.63, AvgLoss=302.48, LR=0.0000, batchsize=1024, Examples/sec=1247.36, Rank(z)=0.8475, Rank(repr)=0.5153
+2025-02-24 23:11:24,700 - root - INFO - [Epoch=0, Step=40] Loss=302.56, MixLoss=11.28, AvgLoss=302.50, LR=0.0000, batchsize=1024, Examples/sec=1248.66, Rank(z)=0.8480, Rank(repr)=0.5147
+2025-02-24 23:11:32,891 - root - INFO - [Epoch=0, Step=50] Loss=299.89, MixLoss=4.32, AvgLoss=302.06, LR=0.0000, batchsize=1024, Examples/sec=1250.66, Rank(z)=0.8489, Rank(repr)=0.5144
+2025-02-24 23:11:41,091 - root - INFO - [Epoch=0, Step=60] Loss=294.30, MixLoss=8.30, AvgLoss=300.95, LR=0.0000, batchsize=1024, Examples/sec=1249.63, Rank(z)=0.8481, Rank(repr)=0.5162
+2025-02-24 23:11:49,299 - root - INFO - [Epoch=0, Step=70] Loss=299.13, MixLoss=7.94, AvgLoss=300.72, LR=0.0000, batchsize=1024, Examples/sec=1246.56, Rank(z)=0.8443, Rank(repr)=0.5169
+2025-02-24 23:11:57,498 - root - INFO - [Epoch=0, Step=80] Loss=297.02, MixLoss=9.93, AvgLoss=300.31, LR=0.0000, batchsize=1024, Examples/sec=1248.25, Rank(z)=0.8465, Rank(repr)=0.5168
+2025-02-24 23:12:05,739 - root - INFO - [Epoch=0, Step=90] Loss=294.51, MixLoss=15.52, AvgLoss=299.73, LR=0.0000, batchsize=1024, Examples/sec=1248.34, Rank(z)=0.8445, Rank(repr)=0.5179
+2025-02-24 23:12:13,946 - root - INFO - [Epoch=0, Step=100] Loss=291.72, MixLoss=11.80, AvgLoss=299.00, LR=0.0000, batchsize=1024, Examples/sec=1241.74, Rank(z)=0.8469, Rank(repr)=0.5185
+2025-02-24 23:12:22,517 - root - INFO - [Epoch=0, Step=110] Loss=287.65, MixLoss=9.63, AvgLoss=298.06, LR=0.0000, batchsize=1024, Examples/sec=1195.71, Rank(z)=0.8445, Rank(repr)=0.5198
+2025-02-24 23:12:30,741 - root - INFO - [Epoch=0, Step=120] Loss=284.65, MixLoss=2.69, AvgLoss=297.03, LR=0.0000, batchsize=1024, Examples/sec=1246.80, Rank(z)=0.8426, Rank(repr)=0.5212
+2025-02-24 23:12:39,024 - root - INFO - [Epoch=0, Step=130] Loss=285.79, MixLoss=4.71, AvgLoss=296.22, LR=0.0000, batchsize=1024, Examples/sec=1236.54, Rank(z)=0.8435, Rank(repr)=0.5216
+2025-02-24 23:12:47,338 - root - INFO - [Epoch=0, Step=140] Loss=278.79, MixLoss=9.87, AvgLoss=295.06, LR=0.0000, batchsize=1024, Examples/sec=1231.98, Rank(z)=0.8364, Rank(repr)=0.5260
+2025-02-24 23:12:55,677 - root - INFO - [Epoch=0, Step=150] Loss=275.35, MixLoss=13.02, AvgLoss=293.83, LR=0.0000, batchsize=1024, Examples/sec=1230.31, Rank(z)=0.8397, Rank(repr)=0.5268
+2025-02-24 23:13:03,944 - root - INFO - [Epoch=0, Step=160] Loss=269.29, MixLoss=14.25, AvgLoss=292.39, LR=0.0000, batchsize=1024, Examples/sec=1233.14, Rank(z)=0.8382, Rank(repr)=0.5280
+2025-02-24 23:13:12,174 - root - INFO - [Epoch=0, Step=170] Loss=267.82, MixLoss=14.76, AvgLoss=291.02, LR=0.0000, batchsize=1024, Examples/sec=1245.04, Rank(z)=0.8370, Rank(repr)=0.5291
+2025-02-24 23:13:20,391 - root - INFO - [Epoch=0, Step=180] Loss=257.83, MixLoss=10.45, AvgLoss=289.27, LR=0.0000, batchsize=1024, Examples/sec=1245.99, Rank(z)=0.8385, Rank(repr)=0.5312
+2025-02-24 23:13:28,601 - root - INFO - [Epoch=0, Step=190] Loss=260.14, MixLoss=2.69, AvgLoss=287.82, LR=0.0000, batchsize=1024, Examples/sec=1247.43, Rank(z)=0.8340, Rank(repr)=0.5328
+2025-02-24 23:13:36,827 - root - INFO - [Epoch=0, Step=200] Loss=250.42, MixLoss=9.05, AvgLoss=286.04, LR=0.0000, batchsize=1024, Examples/sec=1245.32, Rank(z)=0.8391, Rank(repr)=0.5327
+2025-02-24 23:13:45,434 - root - INFO - [Epoch=0, Step=210] Loss=243.97, MixLoss=3.10, AvgLoss=284.12, LR=0.0000, batchsize=1024, Examples/sec=1190.06, Rank(z)=0.8376, Rank(repr)=0.5352
+2025-02-24 23:13:53,654 - root - INFO - [Epoch=0, Step=220] Loss=239.26, MixLoss=2.33, AvgLoss=282.17, LR=0.0000, batchsize=1024, Examples/sec=1244.42, Rank(z)=0.8365, Rank(repr)=0.5365
+2025-02-24 23:14:01,855 - root - INFO - [Epoch=0, Step=230] Loss=229.59, MixLoss=7.10, AvgLoss=279.98, LR=0.0000, batchsize=1024, Examples/sec=1248.93, Rank(z)=0.8330, Rank(repr)=0.5398
+2025-02-24 23:14:10,078 - root - INFO - [Epoch=0, Step=240] Loss=225.89, MixLoss=5.99, AvgLoss=277.82, LR=0.0000, batchsize=1024, Examples/sec=1246.36, Rank(z)=0.8337, Rank(repr)=0.5397
+2025-02-24 23:14:18,355 - root - INFO - [Epoch=0, Step=250] Loss=223.44, MixLoss=6.48, AvgLoss=275.73, LR=0.0000, batchsize=1024, Examples/sec=1238.22, Rank(z)=0.8326, Rank(repr)=0.5409
+2025-02-24 23:14:26,700 - root - INFO - [Epoch=0, Step=260] Loss=219.02, MixLoss=4.78, AvgLoss=273.63, LR=0.0000, batchsize=1024, Examples/sec=1227.86, Rank(z)=0.8309, Rank(repr)=0.5434
+2025-02-24 23:14:35,034 - root - INFO - [Epoch=0, Step=270] Loss=211.59, MixLoss=13.99, AvgLoss=271.41, LR=0.0000, batchsize=1024, Examples/sec=1229.03, Rank(z)=0.8270, Rank(repr)=0.5462
+2025-02-24 23:14:43,266 - root - INFO - [Epoch=0, Step=280] Loss=205.34, MixLoss=13.92, AvgLoss=269.13, LR=0.0000, batchsize=1024, Examples/sec=1242.01, Rank(z)=0.8258, Rank(repr)=0.5488
+2025-02-24 23:14:53,664 - root - INFO - [Epoch=0, Step=290] Loss=198.38, MixLoss=4.17, AvgLoss=266.78, LR=0.0000, batchsize=1024, Examples/sec=984.31, Rank(z)=0.8248, Rank(repr)=0.5508
+2025-02-24 23:15:01,890 - root - INFO - [Epoch=0, Step=300] Loss=196.46, MixLoss=10.99, AvgLoss=264.51, LR=0.0000, batchsize=1024, Examples/sec=1244.30, Rank(z)=0.8231, Rank(repr)=0.5536
+2025-02-24 23:15:51,609 - root - INFO - Validation at step 300: val_acc=0.4706
+2025-02-24 23:15:52,192 - root - INFO - Saved checkpoint at checkpoints/ssl/best_model_20250224_230727.pth
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+2025-02-24 23:16:00,526 - root - INFO - [Epoch=0, Step=310] Loss=190.19, MixLoss=15.35, AvgLoss=262.18, LR=0.0000, batchsize=1024, Examples/sec=174.71, Rank(z)=0.8233, Rank(repr)=0.5555
+2025-02-24 23:16:08,869 - root - INFO - [Epoch=0, Step=320] Loss=186.50, MixLoss=10.57, AvgLoss=259.89, LR=0.0000, batchsize=1024, Examples/sec=1226.38, Rank(z)=0.8200, Rank(repr)=0.5599
+2025-02-24 23:16:17,202 - root - INFO - [Epoch=0, Step=330] Loss=180.18, MixLoss=7.32, AvgLoss=257.55, LR=0.0000, batchsize=1024, Examples/sec=1225.10, Rank(z)=0.8172, Rank(repr)=0.5622
+2025-02-24 23:16:25,614 - root - INFO - [Epoch=0, Step=340] Loss=177.00, MixLoss=8.99, AvgLoss=255.25, LR=0.0000, batchsize=1024, Examples/sec=1221.39, Rank(z)=0.8176, Rank(repr)=0.5622
+2025-02-24 23:16:33,968 - root - INFO - [Epoch=0, Step=350] Loss=172.69, MixLoss=8.38, AvgLoss=252.95, LR=0.0000, batchsize=1024, Examples/sec=1224.93, Rank(z)=0.8170, Rank(repr)=0.5655

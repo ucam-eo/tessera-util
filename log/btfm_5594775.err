@@ -1,0 +1,179 @@
+Loading default-dawn
+  Loading requirement: dawn-env/2023-12-22 dawn-env/2024-04-15
+    dawn-env/2024-12-01 rhel8/global rhel8/slurm
+Loading intel-oneapi-mpi/2021.14.1/oneapi/6qxeyc5c
+  Loading requirement: glibc/2.28/gcc/olqvxojx
+Loading intel-oneapi-compilers/2025.0.4/gcc/umo7dwbo
+  Loading requirement: gcc-runtime/14.2.0/gcc/w62p4k2j
+    zlib-ng/2.2.1/gcc/driavgwo zstd/1.5.6/gcc/vspjj6g4
+    binutils/2.43.1/gcc/ohtm4il2
+[W224 23:00:35.729778021 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.729889326 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.730042592 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.729945977 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.730083451 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.730136515 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.730126182 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+[W224 23:00:35.730169996 OperatorEntry.cpp:155] Warning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: aten::_cummax_helper(Tensor self, Tensor(a!) values, Tensor(b!) indices, int dim) -> ()
+    registered at /build/pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
+  dispatch key: XPU
+  previous kernel: registered at /build/pytorch/build/aten/src/ATen/RegisterCPU.cpp:30476
+       new kernel: registered at /build/intel-pytorch-extension/build/Release/csrc/gpu/csrc/aten/generated/ATen/RegisterXPU.cpp:2971 (function operator())
+2025-02-24 23:02:03,836 - root - INFO - Running on 8 XPU(s). LocalRank=0, device=xpu:0
+2025-02-24 23:02:03,836 - root - INFO - chunk_batch = 40
+wandb: Currently logged in as: frankfeng1223. Use `wandb login --relogin` to force relogin
+wandb: Using wandb-core as the SDK backend.  Please refer to https://wandb.me/wandb-core for more information.
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+wandb: Tracking run with wandb version 0.19.2
+wandb: Run data is saved locally in /rds/user/zf281/hpc-work/Files/btfm4rs/wandb/run-20250224_230204-zg2fc1bq
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run BT_Iter_20250224_230203
+wandb: ⭐️ View project at https://wandb.ai/frankfeng1223/btfm-iterable
+wandb: 🚀 View run at https://wandb.ai/frankfeng1223/btfm-iterable/runs/zg2fc1bq
+2025-02-24 23:02:10,415 - root - INFO - Total steps (approx) = 908203
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+2025-02-24 23:02:10,869 - root - INFO - Model has 13092866 trainable parameters.
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:232: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = amp.GradScaler()
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+2025-02-24 23:02:29,094 - root - INFO - Epoch 0: total new files = 31 in each folder
+2025-02-24 23:02:29,095 - root - INFO - Epoch 0, chunk [0:31], loading 31 files...
+2025-02-24 23:04:45,625 - root - INFO -    => This chunk has 31000000 samples total, steps in dataloader = 3784.
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/train_multi_xpu.py:345: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with amp.autocast():
+/home/zf281/rds/hpc-work/Softwares/anaconda3/envs/btfm-my/lib/python3.9/site-packages/torch/amp/autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+[rank1]:[W224 23:05:01.234818212 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank2]:[W224 23:05:01.234734002 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank0]:[W224 23:05:01.234899307 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank3]:[W224 23:05:01.235033992 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank6]:[W224 23:05:01.234941530 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank7]:[W224 23:05:01.234949897 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank4]:[W224 23:05:01.235094224 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+[rank5]:[W224 23:05:01.235035649 reducer.cpp:69] Warning: measureDifference between two events is not supported on XPU backend! (function operator())
+/rds/user/zf281/hpc-work/Files/btfm4rs/src/utils/metrics.py:13: UserWarning: Aten Op fallback from XPU to CPU happends. This may have performance implications. If need debug the fallback ops please set environment variable `PYTORCH_DEBUG_XPU_FALLBACK=1`  (Triggered internally at /build/pytorch/build/aten/src/ATen/xpu/RegisterXPU.cpp:7614.)
+  s = z.svd(compute_uv=False)[1]
+2025-02-24 23:05:35,005 - root - INFO - [Epoch=0, Step=0] Loss=301.93, MixLoss=16.02, AvgLoss=301.93, LR=0.0000, batchsize=1024, Examples/sec=5.59, Rank(z)=0.8758, Rank(repr)=0.5321
+2025-02-24 23:05:45,903 - root - INFO - [Epoch=0, Step=10] Loss=308.99, MixLoss=7.89, AvgLoss=305.46, LR=0.0000, batchsize=1024, Examples/sec=759.00, Rank(z)=0.8764, Rank(repr)=0.5305
+2025-02-24 23:05:54,191 - root - INFO - [Epoch=0, Step=20] Loss=301.10, MixLoss=9.68, AvgLoss=304.00, LR=0.0000, batchsize=1024, Examples/sec=1229.09, Rank(z)=0.8762, Rank(repr)=0.5322
+2025-02-24 23:06:02,483 - root - INFO - [Epoch=0, Step=30] Loss=298.07, MixLoss=10.61, AvgLoss=302.52, LR=0.0000, batchsize=1024, Examples/sec=1234.76, Rank(z)=0.8749, Rank(repr)=0.5317
+2025-02-24 23:06:10,761 - root - INFO - [Epoch=0, Step=40] Loss=295.33, MixLoss=3.78, AvgLoss=301.08, LR=0.0000, batchsize=1024, Examples/sec=1237.16, Rank(z)=0.8755, Rank(repr)=0.5315
+2025-02-24 23:06:19,057 - root - INFO - [Epoch=0, Step=50] Loss=293.59, MixLoss=11.26, AvgLoss=299.83, LR=0.0000, batchsize=1024, Examples/sec=1233.79, Rank(z)=0.8752, Rank(repr)=0.5322
+2025-02-24 23:06:27,371 - root - INFO - [Epoch=0, Step=60] Loss=294.95, MixLoss=9.49, AvgLoss=299.14, LR=0.0000, batchsize=1024, Examples/sec=1231.98, Rank(z)=0.8741, Rank(repr)=0.5324
+slurmstepd: error: *** JOB 5594775 ON pvc-s-233 CANCELLED AT 2025-02-24T23:06:32 ***
+slurmstepd: error: *** STEP 5594775.0 ON pvc-s-233 CANCELLED AT 2025-02-24T23:06:32 ***

@@ -2,7 +2,7 @@
 
 import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-os.environ["NUMEXPR_MAX_THREADS"] = "24"
+os.environ["NUMEXPR_MAX_THREADS"] = "56"
 import time
 import math
 import subprocess
@@ -101,13 +101,13 @@ def main():
 
     for epoch in range(config['epochs']):
         # 生成新数据：删除旧数据并调用rust命令生成新数据
-        # aug1_dir = os.path.join(config['data_root'], 'aug1')
-        # aug2_dir = os.path.join(config['data_root'], 'aug2')
-        # remove_dir(aug1_dir)
-        # remove_dir(aug2_dir)
-        # logging.info(f"Epoch {epoch} started. Generating new training data...")
-        # subprocess.run(config['rust_cmd'], shell=True, check=True)
-        # logging.info("Data generation finished. Loading new training data...")
+        aug1_dir = os.path.join(config['data_root'], 'aug1')
+        aug2_dir = os.path.join(config['data_root'], 'aug2')
+        remove_dir(aug1_dir)
+        remove_dir(aug2_dir)
+        logging.info(f"Epoch {epoch} started. Generating new training data...")
+        subprocess.run(config['rust_cmd'], shell=True, check=True)
+        logging.info("Data generation finished. Loading new training data...")
 
         dataset_train = HDF5Dataset_Multimodal_Tiles_Iterable(
             data_root=config['data_root'],

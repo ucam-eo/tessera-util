@@ -2,8 +2,8 @@
 
 config = {
     "data_root": "data/ssl_training/ready_to_use",
-    "batch_size": 512,
-    "epochs": 5,
+    "batch_size": 1024,
+    "epochs": 30,
     "learning_rate": 0.1,
     "barlow_lambda": 5e-3,
     "fusion_method": "sum",  # 可选 'sum', 'concat', 'transformer'
@@ -13,7 +13,7 @@ config = {
     "min_valid_timesteps": 20,
     "sample_size_s2": 20,
     "sample_size_s1": 20,
-    "num_workers": 8,
+    "num_workers": 4,
     "shuffle_tiles": True,
     "log_interval_steps":10,
     "val_interval_steps": 300,
@@ -34,12 +34,13 @@ config = {
     "beta_beta": 1.0,
     "total_samples": 31000000,
     "rust_cmd": (
-        "RUST_LOG=debug src/utils/training-data-preprocessing "
-        "--data-root data/ssl_training/global "
+        "RUST_LOG=debug singularity run training-data-preprocessing/training-data-preprocessing.sif "
+        "--data-root /home/zf281/rds/hpc-work/Files/btfm/data/global "
         "--output-dir data/ssl_training/ready_to_use "
-        "--tile-batch 30 "
+        "--tile-batch 60 "
         "--time-steps 20 "
         "--chunk-size 1000000 "
         "--min-valid-timesteps 20"
-    )
+    ),
+    "chunk_batch": 40, # chunk batch when loading data
 }
