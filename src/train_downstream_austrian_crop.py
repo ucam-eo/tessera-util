@@ -42,7 +42,7 @@ class_names = [
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Downstream Classification Training")
-    parser.add_argument('--config', type=str, required=True, help="Path to config file (e.g. configs/downstream_config.py)")
+    parser.add_argument('--config', type=str, default="configs/downstream_config.py", help="Path to config file (e.g. configs/downstream_config.py)")
     return parser.parse_args()
 
 def main():
@@ -234,7 +234,7 @@ def main():
     clf_head = ClassificationHead(input_dim=classification_in_dim, num_classes=num_classes).to(device)
     downstream_model = MultimodalDownstreamModel(s2_backbone=ssl_model.s2_backbone,
                                                   s1_backbone=ssl_model.s1_backbone,
-                                                  classifier=clf_head,
+                                                  head=clf_head,
                                                   fusion_method=config['fusion_method']).to(device)
     # 打印模型构建后backbone权重
     logging.info("After constructing downstream model, s2_backbone weights:")

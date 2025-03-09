@@ -60,7 +60,7 @@ def main():
         dataset,
         batch_size=config["batch_size"],
         shuffle=False,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True,
         drop_last=False
     )
@@ -110,6 +110,7 @@ def main():
         out_list = []
         for b in range(B):
             valid_idx = np.nonzero(s2_masks_batch[b])[0]
+                
             if len(valid_idx) < sample_size_s2:
                 idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=True)
             else:

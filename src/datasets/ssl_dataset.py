@@ -332,3 +332,115 @@ class SingleTileInferenceDataset(Dataset):
             "s1_desc_doys": s1_desc_doys_ij,
         }
         return sample
+
+class PastisPatchInferenceDataset(Dataset):
+    """
+    用于单个 PASTIS patch 推理的数据集，
+    读取 patch 文件夹下的 bands/masks/doys/sar_asc*/sar_desc* 等，
+    并对每个像素返回 (i, j) 以及对应的时序数据 (无随机采样)。
+    """
+
+    def __init__(self,
+                 patch_path,
+                 min_valid_timesteps=0,
+                 standardize=True):
+        super().__init__()
+        self.patch_path = patch_path
+        self.min_valid_timesteps = min_valid_timesteps
+        self.standardize = standardize
+
+        # 加载 S2
+        s2_bands_path = os.path.join(patch_path, "bands.npy")   # (T_s2, H, W, 10)
+        s2_masks_path = os.path.join(patch_path, "masks.npy")   # (T_s2, H, W)
+        s2_doy_path   = os.path.join(patch_path, "doys.npy")    # (T_s2,)
+
+        self.s2_bands = np.load(s2_bands_path).astype(np.float32)
+        self.s2_masks = np.load(s2_masks_path).astype(np.int32)
+        self.s2_doys  = np.load(s2_doy_path).astype(np.int32)
+
+        # 加载 S1 asc
+        s1_asc_bands_path = os.path.join(patch_path, "sar_ascending.npy")      # (T_s1a, H, W, 2)
+        s1_asc_doy_path   = os.path.join(patch_path, "sar_ascending_doy.npy")  # (T_s1a,)
+
+        self.s1_asc_bands = np.load(s1_asc_bands_path).astype(np.float32)
+        self.s1_asc_doys  = np.load(s1_asc_doy_path).astype(np.int32)
+
+        # 加载 S1 desc
+        s1_desc_bands_path = os.path.join(patch_path, "sar_descending.npy")      # (T_s1d, H, W, 2)
+        s1_desc_doy_path   = os.path.join(patch_path, "sar_descending_doy.npy")  # (T_s1d,)
+
+        self.s1_desc_bands = np.load(s1_desc_bands_path).astype(np.float32)
+        self.s1_desc_doys  = np.load(s1_desc_doy_path).astype(np.int32)
+
+        # 获取形状
+        self.T_s2, self.H, self.W, _ = self.s2_bands.shape
+        self.T_s1a = self.s1_asc_bands.shape[0]
+        self.T_s1d = self.s1_desc_bands.shape[0]
+
+        self.s2_band_mean = S2_BAND_MEAN
+        self.s2_band_std  = S2_BAND_STD
+        self.s1_band_mean = S1_BAND_MEAN
+        self.s1_band_std  = S1_BAND_STD
+
+        # 收集 valid_pixels
+        self.valid_pixels = []
+        ij_coords = np.indices((self.H, self.W)).reshape(2, -1).T
+        for idx, (i, j) in enumerate(ij_coords):
+            # s2 有效帧
+            s2_mask_ij = self.s2_masks[:, i, j]
+            s2_valid = s2_mask_ij.sum()
+
+            # s1 asc
+            s1_asc_ij = self.s1_asc_bands[:, i, j, :]
+            s1_asc_valid = np.any(s1_asc_ij != 0, axis=-1).sum()
+
+            # s1 desc
+            s1_desc_ij = self.s1_desc_bands[:, i, j, :]
+            s1_desc_valid = np.any(s1_desc_ij != 0, axis=-1).sum()
+
+            s1_total_valid = s1_asc_valid + s1_desc_valid
+
+            if (s2_valid >= self.min_valid_timesteps) and (s1_total_valid >= self.min_valid_timesteps):
+                self.valid_pixels.append((idx, i, j))
+
+        logging.info(f"[PastisPatchInferenceDataset] patch={patch_path}, total_valid_pixels={len(self.valid_pixels)}")
+
+    def __len__(self):
+        return len(self.valid_pixels)
+
+    def __getitem__(self, index):
+        global_idx, i, j = self.valid_pixels[index]
+        # 取出 s2
+        s2_bands_ij = self.s2_bands[:, i, j, :]  # (T_s2, 10)
+        s2_masks_ij = self.s2_masks[:, i, j]     # (T_s2,)
+        s2_doys_ij  = self.s2_doys              # (T_s2,)
+
+        # asc
+        s1_asc_bands_ij = self.s1_asc_bands[:, i, j, :]  # (T_s1a, 2)
+        s1_asc_doys_ij  = self.s1_asc_doys               # (T_s1a,)
+
+        # desc
+        s1_desc_bands_ij = self.s1_desc_bands[:, i, j, :] # (T_s1d, 2)
+        s1_desc_doys_ij  = self.s1_desc_doys              # (T_s1d,)
+
+        sample = {
+            "global_idx": global_idx,
+            "i": i,
+            "j": j,
+            "s2_bands": s2_bands_ij,
+            "s2_masks": s2_masks_ij,
+            "s2_doys": s2_doys_ij,
+
+            "s1_asc_bands": s1_asc_bands_ij,
+            "s1_asc_doys": s1_asc_doys_ij,
+            "s1_desc_bands": s1_desc_bands_ij,
+            "s1_desc_doys": s1_desc_doys_ij,
+        }
+        return sample
+
+    @property
+    def shape(self):
+        """
+        返回 (H, W)，用于外部构建输出数组
+        """
+        return (self.H, self.W)

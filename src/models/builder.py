@@ -8,6 +8,8 @@ def build_ssl_model(config, device):
         latent_dim=config['latent_dim'],
         nhead=16,
         num_encoder_layers=32,
+        # nhead=8,
+        # num_encoder_layers=16,
         dim_feedforward=512,
         dropout=0.1,
         max_seq_len=20
@@ -17,6 +19,8 @@ def build_ssl_model(config, device):
         latent_dim=config['latent_dim'],
         nhead=16,
         num_encoder_layers=32,
+        # nhead=8,
+        # num_encoder_layers=16,
         dim_feedforward=512,
         dropout=0.1,
         max_seq_len=20
