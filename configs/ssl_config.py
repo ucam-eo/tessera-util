@@ -2,9 +2,9 @@
 
 config = {
     "data_root": "data/ssl_training/ready_to_use",
-    "batch_size": 1024,
-    "epochs": 30,
-    "learning_rate": 0.1,
+    "batch_size": 4096,
+    "epochs": 10,
+    "learning_rate": 0.2,
     "barlow_lambda": 5e-3,
     "fusion_method": "sum",  # 可选 'sum', 'concat', 'transformer'
     "latent_dim": 128,
@@ -13,7 +13,7 @@ config = {
     "min_valid_timesteps": 20,
     "sample_size_s2": 20,
     "sample_size_s1": 20,
-    "num_workers": 4,
+    "num_workers": 0,
     "shuffle_tiles": True,
     "log_interval_steps":10,
     "val_interval_steps": 300,
@@ -28,19 +28,22 @@ config = {
     "val_labels_path": "data/ssl_training/austrian_crop/fieldtype_17classes_downsample_100.npy",
     "warmup_ratio": 0.2,
     "plateau_ratio": 0.2,
-    "apply_mixup": True,
+    # "apply_mixup": True,
+    "apply_mixup": False,
     "mixup_lambda": 1.0,
     "beta_alpha": 1.0,
     "beta_beta": 1.0,
-    "total_samples": 31000000,
+    "total_samples": 67000000,
     "rust_cmd": (
         "RUST_LOG=debug singularity run training-data-preprocessing/training-data-preprocessing.sif "
-        "--data-root /home/zf281/rds/hpc-work/Files/btfm/data/global "
+        "--data-root /home/zf281/rds/rds-sj514-data-WBrUDmBgqOo/s2_s1_global_project/data_processed "
         "--output-dir data/ssl_training/ready_to_use "
-        "--tile-batch 60 "
+        "--tile-batch 90 "
         "--time-steps 20 "
         "--chunk-size 1000000 "
         "--min-valid-timesteps 20"
     ),
-    "chunk_batch": 40, # chunk batch when loading data
+    "chunk_batch": 23, # chunk batch when loading data
+    # "chunk_batch": 1, # chunk batch when loading data
+    "apply_amp": True,
 }

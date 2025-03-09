@@ -1,7 +1,9 @@
 # to aply for an interactive node on GPU
+salloc --nodes=1 --ntasks-per-node=1 -p pvc --gres=gpu:1 -A CLIMATE-DAWN-GPU --cpus-per-task=24 --mem=128G -t 36:00:00
+
 salloc --nodes=1 --ntasks-per-node=8 -p pvc --gres=gpu:4 -A CLIMATE-DAWN-GPU --cpus-per-task=12 --mem=1000G -t 36:00:00
 
-salloc --nodes=2 --ntasks-per-node=2 -p pvc --gres=gpu:2 -A CLIMATE-DAWN-GPU --cpus-per-task=6 --mem=100G -t 36:00:00
+salloc --nodes=2 --ntasks-per-node=8 -p pvc --gres=gpu:4 -A CLIMATE-DAWN-GPU --cpus-per-task=12 --mem=1000G -t 36:00:00
 
 salloc --nodes=1 -p icelake -A KESHAV-SL3-CPU --cpus-per-task=48 --mem=150G -t 6:00:00
 
@@ -16,3 +18,5 @@ sintr -t 07:00:00 -A CLIMATE-DAWN-GPU -p pvc -n 1 -c 54 --gres=gpu:4 --mem=512G
 sintr -t 06:00:00 -N1 -n38 -A KESHAV-SL3-CPU -p icelake
 
 rsync -av --ignore-existing zf281@kinabalu.cl.cam.ac.uk:/maps/zf281/btfm-data-preparation/s2_s1_global_project/data_processed/ /home/zf281/rds/hpc-work/Files/btfm/data/global/
+
+rsync -avzP zf281@daintree.cl.cam.ac.uk:/scratch/zf281/robin/fungal/data_processed/34VEH .

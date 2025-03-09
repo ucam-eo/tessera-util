@@ -38,20 +38,24 @@ which mpirun
 export ZE_FLAT_DEVICE_HIERARCHY=FLAT
 export ZE_AFFINITY_MASK=0,1,2,3,4,5,6,7
 
+export I_MPI_FABRICS=shm
+
 echo "Running on node: $(hostname)"
 echo "Allocated GPUs:"
 sycl-ls
 
+ulimit -n 65536  # 或者更高，具体看系统允许的最大值
+
 # oneCCL环境变量
 export I_MPI_OFFLOAD=1
-# export I_MPI_DEBUG=5
+export I_MPI_DEBUG=5
 export MASTER_PORT=29500  # 或者你喜欢的端口
 # 其他可选的OpenMP环境变量:
 # export OMP_NUM_THREADS=4
 # export KMP_AFFINITY=granularity=fine,compact,1,0
 # export KMP_BLOCKTIME=1
 
-max_retries=10
+max_retries=1
 count=0
 
 while ! mpirun -n 8 python src/train_multi_xpu.py; do

@@ -232,100 +232,195 @@ class AustrianCropValidation(Dataset):
         return s2_sample, s1_sample, label
     
     
+# class SingleTileInferenceDataset(Dataset):
+#     """
+#     用于单Tile推理的数据集，仅返回像素的 (i, j) 以及对应的 s2/s1 数据。
+#     在 __getitem__ 里不做随机采样，因为要重复多次随机采样(10次)后取平均。
+#     """
+#     def __init__(self,
+#                  tile_path,
+#                  min_valid_timesteps=10,
+#                  standardize=True):
+#         super().__init__()
+#         self.tile_path = tile_path
+#         self.min_valid_timesteps = min_valid_timesteps
+#         self.standardize = standardize
+
+#         # 加载 S2
+#         s2_bands_path = os.path.join(tile_path, "bands.npy")    # (t_s2, H, W, 10)
+#         s2_masks_path = os.path.join(tile_path, "masks.npy")    # (t_s2, H, W)        
+#         # s2_bands_path = os.path.join(tile_path, "bands_downsample_100.npy")    # (t_s2, H, W, 10)
+#         # s2_masks_path = os.path.join(tile_path, "masks_downsample_100.npy")    # (t_s2, H, W) 
+#         s2_doy_path   = os.path.join(tile_path, "doys.npy")     # (t_s2,)        
+
+#         # >>> 修复UInt16类型: 转换为 int32 等通用类型 <<<
+#         self.s2_bands = np.load(s2_bands_path).astype(np.float32)
+#         self.s2_masks = np.load(s2_masks_path).astype(np.int32)
+#         # self.s2_bands = np.load(s2_bands_path, mmap_mode='r').astype(np.float32)
+#         # self.s2_masks = np.load(s2_masks_path, mmap_mode='r').astype(np.int32)
+#         self.s2_doys  = np.load(s2_doy_path).astype(np.int32)   # 避免uint16, 转成int32
+
+#         # 加载 S1 asc
+#         s1_asc_bands_path = os.path.join(tile_path, "sar_ascending.npy")      # (t_s1a, H, W, 2)
+#         # s1_asc_bands_path = os.path.join(tile_path, "sar_ascending_downsample_100.npy")      # (t_s1a, H, W, 2)
+#         s1_asc_doy_path   = os.path.join(tile_path, "sar_ascending_doy.npy")  # (t_s1a,)        
+
+#         self.s1_asc_bands = np.load(s1_asc_bands_path).astype(np.float32)
+#         # self.s1_asc_bands = np.load(s1_asc_bands_path, mmap_mode='r').astype(np.float32)
+#         self.s1_asc_doys  = np.load(s1_asc_doy_path).astype(np.int32)
+
+#         # 加载 S1 desc
+#         s1_desc_bands_path = os.path.join(tile_path, "sar_descending.npy")      # (t_s1d, H, W, 2)
+#         # s1_desc_bands_path = os.path.join(tile_path, "sar_descending_downsample_100.npy")      # (t_s1d, H, W, 2)
+#         s1_desc_doy_path   = os.path.join(tile_path, "sar_descending_doy.npy")  # (t_s1d,)
+
+#         self.s1_desc_bands = np.load(s1_desc_bands_path).astype(np.float32)
+#         # self.s1_desc_bands = np.load(s1_desc_bands_path, mmap_mode='r').astype(np.float32)
+#         self.s1_desc_doys  = np.load(s1_desc_doy_path).astype(np.int32)
+
+#         # 形状
+#         self.t_s2, self.H, self.W, _ = self.s2_bands.shape
+
+#         self.s2_band_mean = S2_BAND_MEAN
+#         self.s2_band_std = S2_BAND_STD
+#         self.s1_band_mean = S1_BAND_MEAN
+#         self.s1_band_std = S1_BAND_STD
+
+#         # 过滤像素
+#         self.valid_pixels = []
+#         ij_coords = np.indices((self.H, self.W)).reshape(2, -1).T
+#         for idx, (i, j) in enumerate(ij_coords):
+#             # s2 有效帧数
+#             s2_mask_ij = self.s2_masks[:, i, j]
+#             s2_valid = s2_mask_ij.sum()
+
+#             # s1 asc
+#             s1_asc_ij = self.s1_asc_bands[:, i, j, :]  # (t_s1a, 2)
+#             s1_asc_valid = np.any(s1_asc_ij != 0, axis=-1).sum()
+
+#             # s1 desc
+#             s1_desc_ij = self.s1_desc_bands[:, i, j, :]  # (t_s1d, 2)
+#             s1_desc_valid = np.any(s1_desc_ij != 0, axis=-1).sum()
+
+#             s1_total_valid = s1_asc_valid + s1_desc_valid
+#             if (s2_valid >= self.min_valid_timesteps) and (s1_total_valid >= self.min_valid_timesteps):
+#                 # 保留该像素
+#                 self.valid_pixels.append((idx, i, j))
+
+#         logging.info(f"[SingleTileInferenceDataset] tile={tile_path}, total_valid_pixels={len(self.valid_pixels)}")
+
+#     def __len__(self):
+#         return len(self.valid_pixels)
+
+#     def __getitem__(self, index):
+#         global_idx, i, j = self.valid_pixels[index]
+
+#         # 将整个像素的 s2, s1 数据都取出
+#         s2_bands_ij = self.s2_bands[:, i, j, :]  # (t_s2, 10)
+#         s2_masks_ij = self.s2_masks[:, i, j]     # (t_s2,)
+#         s2_doys_ij  = self.s2_doys              # (t_s2,)
+
+#         s1_asc_bands_ij = self.s1_asc_bands[:, i, j, :]  # (t_s1a, 2)
+#         s1_asc_doys_ij  = self.s1_asc_doys               # (t_s1a,)
+
+#         s1_desc_bands_ij = self.s1_desc_bands[:, i, j, :]  # (t_s1d, 2)
+#         s1_desc_doys_ij  = self.s1_desc_doys               # (t_s1d,)
+
+#         sample = {
+#             "global_idx": global_idx,
+#             "i": i,
+#             "j": j,
+#             "s2_bands": s2_bands_ij,
+#             "s2_masks": s2_masks_ij,
+#             "s2_doys": s2_doys_ij,
+
+#             "s1_asc_bands": s1_asc_bands_ij,
+#             "s1_asc_doys": s1_asc_doys_ij,
+#             "s1_desc_bands": s1_desc_bands_ij,
+#             "s1_desc_doys": s1_desc_doys_ij,
+#         }
+#         return sample
+
+
+
 class SingleTileInferenceDataset(Dataset):
     """
     用于单Tile推理的数据集，仅返回像素的 (i, j) 以及对应的 s2/s1 数据。
-    在 __getitem__ 里不做随机采样，因为要重复多次随机采样(10次)后取平均。
+    本版本从预先切块后的文件中加载数据，参数 chunk_folder 和 chunk_id 指定对应切块文件，
+    start_row 为当前 chunk 在全图中的起始行号（用于计算全局索引）。
     """
-    def __init__(self,
-                 tile_path,
-                 min_valid_timesteps=10,
-                 standardize=True):
+    def __init__(self, tile_path, chunk_folder, chunk_id, start_row,
+                 min_valid_timesteps=10, standardize=True):
         super().__init__()
         self.tile_path = tile_path
+        self.chunk_folder = chunk_folder
+        self.chunk_id = chunk_id
+        self.start_row = start_row
         self.min_valid_timesteps = min_valid_timesteps
         self.standardize = standardize
 
-        # 加载 S2
-        s2_bands_path = os.path.join(tile_path, "bands.npy")    # (t_s2, H, W, 10)
-        s2_masks_path = os.path.join(tile_path, "masks.npy")    # (t_s2, H, W)
-        s2_doy_path   = os.path.join(tile_path, "doys.npy")     # (t_s2,)
+        # 从预先切块的文件中加载 s2 和 s1 数据
+        self.s2_bands = np.load(os.path.join(chunk_folder, f"chunk_{chunk_id}_bands.npy")).astype(np.float32)
+        self.s2_masks = np.load(os.path.join(chunk_folder, f"chunk_{chunk_id}_masks.npy")).astype(np.int32)
+        # 加载 s2_doys（较小，不切块）
+        s2_doy_path = os.path.join(tile_path, "doys.npy")
+        self.s2_doys = np.load(s2_doy_path).astype(np.int32)
 
-        # >>> 修复UInt16类型: 转换为 int32 等通用类型 <<<
-        self.s2_bands = np.load(s2_bands_path).astype(np.float32)
-        self.s2_masks = np.load(s2_masks_path).astype(np.int32)
-        self.s2_doys  = np.load(s2_doy_path).astype(np.int32)   # 避免uint16, 转成int32
+        self.s1_asc_bands = np.load(os.path.join(chunk_folder, f"chunk_{chunk_id}_sar_ascending.npy")).astype(np.float32)
+        s1_asc_doy_path = os.path.join(tile_path, "sar_ascending_doy.npy")
+        self.s1_asc_doys = np.load(s1_asc_doy_path).astype(np.int32)
 
-        # 加载 S1 asc
-        s1_asc_bands_path = os.path.join(tile_path, "sar_ascending.npy")      # (t_s1a, H, W, 2)
-        s1_asc_doy_path   = os.path.join(tile_path, "sar_ascending_doy.npy")  # (t_s1a,)
+        self.s1_desc_bands = np.load(os.path.join(chunk_folder, f"chunk_{chunk_id}_sar_descending.npy")).astype(np.float32)
+        s1_desc_doy_path = os.path.join(tile_path, "sar_descending_doy.npy")
+        self.s1_desc_doys = np.load(s1_desc_doy_path).astype(np.int32)
 
-        self.s1_asc_bands = np.load(s1_asc_bands_path).astype(np.float32)
-        self.s1_asc_doys  = np.load(s1_asc_doy_path).astype(np.int32)
-
-        # 加载 S1 desc
-        s1_desc_bands_path = os.path.join(tile_path, "sar_descending.npy")      # (t_s1d, H, W, 2)
-        s1_desc_doy_path   = os.path.join(tile_path, "sar_descending_doy.npy")  # (t_s1d,)
-
-        self.s1_desc_bands = np.load(s1_desc_bands_path).astype(np.float32)
-        self.s1_desc_doys  = np.load(s1_desc_doy_path).astype(np.int32)
-
-        # 形状
-        self.t_s2, self.H, self.W, _ = self.s2_bands.shape
+        # 获取切块后数据的形状
+        # s2_bands: (t_s2, H_chunk, W, channels)
+        _, self.H_chunk, self.W, _ = self.s2_bands.shape
 
         self.s2_band_mean = S2_BAND_MEAN
         self.s2_band_std = S2_BAND_STD
         self.s1_band_mean = S1_BAND_MEAN
         self.s1_band_std = S1_BAND_STD
 
-        # 过滤像素
+        # 过滤有效像素，仅在当前 chunk 范围内（行号为 0 ~ H_chunk-1，对应全图行号为 start_row ~ start_row+H_chunk-1）
         self.valid_pixels = []
-        ij_coords = np.indices((self.H, self.W)).reshape(2, -1).T
-        for idx, (i, j) in enumerate(ij_coords):
-            # s2 有效帧数
-            s2_mask_ij = self.s2_masks[:, i, j]
-            s2_valid = s2_mask_ij.sum()
-
-            # s1 asc
-            s1_asc_ij = self.s1_asc_bands[:, i, j, :]  # (t_s1a, 2)
-            s1_asc_valid = np.any(s1_asc_ij != 0, axis=-1).sum()
-
-            # s1 desc
-            s1_desc_ij = self.s1_desc_bands[:, i, j, :]  # (t_s1d, 2)
-            s1_desc_valid = np.any(s1_desc_ij != 0, axis=-1).sum()
-
-            s1_total_valid = s1_asc_valid + s1_desc_valid
-            if (s2_valid >= self.min_valid_timesteps) and (s1_total_valid >= self.min_valid_timesteps):
-                # 保留该像素
-                self.valid_pixels.append((idx, i, j))
-
-        logging.info(f"[SingleTileInferenceDataset] tile={tile_path}, total_valid_pixels={len(self.valid_pixels)}")
+        for i_rel in range(self.H_chunk):
+            i_abs = i_rel + self.start_row
+            for j in range(self.W):
+                s2_mask_ij = self.s2_masks[:, i_rel, j]
+                s2_valid = s2_mask_ij.sum()
+                s1_asc_ij = self.s1_asc_bands[:, i_rel, j, :]  # (t_s1a, channels)
+                s1_asc_valid = np.any(s1_asc_ij != 0, axis=-1).sum()
+                s1_desc_ij = self.s1_desc_bands[:, i_rel, j, :]
+                s1_desc_valid = np.any(s1_desc_ij != 0, axis=-1).sum()
+                s1_total_valid = s1_asc_valid + s1_desc_valid
+                if (s2_valid >= self.min_valid_timesteps) and (s1_total_valid >= self.min_valid_timesteps):
+                    # 保存 (局部行号, 全局行号, j)
+                    self.valid_pixels.append((i_rel, i_abs, j))
+        logging.info(f"[SingleTileInferenceDataset] tile={tile_path}, chunk_id={chunk_id}, start_row={self.start_row}, total_valid_pixels={len(self.valid_pixels)}")
 
     def __len__(self):
         return len(self.valid_pixels)
 
     def __getitem__(self, index):
-        global_idx, i, j = self.valid_pixels[index]
-
-        # 将整个像素的 s2, s1 数据都取出
-        s2_bands_ij = self.s2_bands[:, i, j, :]  # (t_s2, 10)
-        s2_masks_ij = self.s2_masks[:, i, j]     # (t_s2,)
-        s2_doys_ij  = self.s2_doys              # (t_s2,)
-
-        s1_asc_bands_ij = self.s1_asc_bands[:, i, j, :]  # (t_s1a, 2)
-        s1_asc_doys_ij  = self.s1_asc_doys               # (t_s1a,)
-
-        s1_desc_bands_ij = self.s1_desc_bands[:, i, j, :]  # (t_s1d, 2)
-        s1_desc_doys_ij  = self.s1_desc_doys               # (t_s1d,)
-
+        i_rel, i_abs, j = self.valid_pixels[index]
+        # 计算全局索引：i_abs * W + j
+        full_idx = i_abs * self.W + j
+        s2_bands_ij = self.s2_bands[:, i_rel, j, :]  # (t_s2, channels)
+        s2_masks_ij = self.s2_masks[:, i_rel, j]
+        s2_doys_ij = self.s2_doys
+        s1_asc_bands_ij = self.s1_asc_bands[:, i_rel, j, :]
+        s1_asc_doys_ij = self.s1_asc_doys
+        s1_desc_bands_ij = self.s1_desc_bands[:, i_rel, j, :]
+        s1_desc_doys_ij = self.s1_desc_doys
         sample = {
-            "global_idx": global_idx,
-            "i": i,
+            "global_idx": full_idx,
+            "i": i_abs,
             "j": j,
             "s2_bands": s2_bands_ij,
             "s2_masks": s2_masks_ij,
             "s2_doys": s2_doys_ij,
-
             "s1_asc_bands": s1_asc_bands_ij,
             "s1_asc_doys": s1_asc_doys_ij,
             "s1_desc_bands": s1_desc_bands_ij,

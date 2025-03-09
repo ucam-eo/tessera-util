@@ -7,8 +7,8 @@ import torch
 
 def rankme(z, eps=1e-7):
     # Convert to float32 for SVD
-    if z.dtype == torch.float16:
-        z = z.to(torch.float32)
+    # if z.dtype == torch.float16:
+    z = z.to(torch.float32)
     # Perform SVD
     s = z.svd(compute_uv=False)[1]
     # Calculate rank metrics
