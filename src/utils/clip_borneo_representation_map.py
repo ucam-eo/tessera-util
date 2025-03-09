@@ -107,18 +107,18 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
                     continue
 
                 # 处理RGB patch
-                rgb_patch = process_rgb_patch(bands_data, masks_data, x, y, patch_size)
+                # rgb_patch = process_rgb_patch(bands_data, masks_data, x, y, patch_size)
                 
                 # 保存三个产品
                 rep_patch_path = os.path.join(rep_out_dir, f'rep_patch_{patch_count:04d}.npy')
                 target_patch_path = os.path.join(target_out_dir, f'target_patch_{patch_count:04d}.npy')
-                rgb_patch_path = os.path.join(rgb_out_dir, f'rgb_patch_{patch_count:04d}.png')
+                # rgb_patch_path = os.path.join(rgb_out_dir, f'rgb_patch_{patch_count:04d}.png')
                 
                 np.save(rep_patch_path, rep_patch)
                 np.save(target_patch_path, target_patch)
                 # 注意 cv2.imwrite 默认保存 BGR 格式，所以将 RGB 转为 BGR
-                bgr_patch = cv2.cvtColor(rgb_patch, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(rgb_patch_path, bgr_patch)
+                # bgr_patch = cv2.cvtColor(rgb_patch, cv2.COLOR_RGB2BGR)
+                # cv2.imwrite(rgb_patch_path, bgr_patch)
                 
                 print(f"patch {patch_count:04d} 已保存，位置: ({x}, {y})")
                 patch_count += 1

@@ -48,26 +48,24 @@ def main():
     logging.info(f"Total steps = {total_steps}")
 
     # 建立模型
-    # s2_enc = TransformerEncoder(
-    #     band_num=12,  # 例如 10个波段+sin/cos
-    #     latent_dim=config['latent_dim'],
-    #     nhead=16,
-    #     num_encoder_layers=32,
-    #     dim_feedforward=512,
-    #     dropout=0.1,
-    #     max_seq_len=config['sample_size_s2']
-    # ).to(device)
-    # s1_enc = TransformerEncoder(
-    #     band_num=4,   # 例如 2个波段+sin/cos
-    #     latent_dim=config['latent_dim'],
-    #     nhead=16,
-    #     num_encoder_layers=32,
-    #     dim_feedforward=512,
-    #     dropout=0.1,
-    #     max_seq_len=config['sample_size_s1']
-    # ).to(device)
-    s2_enc = SpectralTemporalTransformer(data_dim=12, nhead=16, num_layers=32).to(device)
-    s1_enc = SpectralTemporalTransformer(data_dim=4, nhead=16, num_layers=32).to(device)
+    s2_enc = TransformerEncoder(
+        band_num=12,  # 例如 10个波段+sin/cos
+        latent_dim=config['latent_dim'],
+        nhead=16,
+        num_encoder_layers=32,
+        dim_feedforward=512,
+        dropout=0.1,
+        max_seq_len=config['sample_size_s2']
+    ).to(device)
+    s1_enc = TransformerEncoder(
+        band_num=4,   # 例如 2个波段+sin/cos
+        latent_dim=config['latent_dim'],
+        nhead=16,
+        num_encoder_layers=32,
+        dim_feedforward=512,
+        dropout=0.1,
+        max_seq_len=config['sample_size_s1']
+    ).to(device)
     
     if config['fusion_method'] == 'concat':
         proj_in_dim = config['latent_dim'] * 2
@@ -97,17 +95,17 @@ def main():
     best_val_acc = 0.0
     # 获取时间戳
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_{timestamp}.pth")
+    best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_{timestamp}.pt")
 
     for epoch in range(config['epochs']):
         # 生成新数据：删除旧数据并调用rust命令生成新数据
-        # aug1_dir = os.path.join(config['data_root'], 'aug1')
-        # aug2_dir = os.path.join(config['data_root'], 'aug2')
-        # remove_dir(aug1_dir)
-        # remove_dir(aug2_dir)
-        # logging.info(f"Epoch {epoch} started. Generating new training data...")
-        # subprocess.run(config['rust_cmd'], shell=True, check=True)
-        # logging.info("Data generation finished. Loading new training data...")
+        aug1_dir = os.path.join(config['data_root'], 'aug1')
+        aug2_dir = os.path.join(config['data_root'], 'aug2')
+        remove_dir(aug1_dir)
+        remove_dir(aug2_dir)
+        logging.info(f"Epoch {epoch} started. Generating new training data...")
+        subprocess.run(config['rust_cmd'], shell=True, check=True)
+        logging.info("Data generation finished. Loading new training data...")
 
         dataset_train = HDF5Dataset_Multimodal_Tiles_Iterable(
             data_root=config['data_root'],

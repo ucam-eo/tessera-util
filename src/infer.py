@@ -110,6 +110,11 @@ def main():
         out_list = []
         for b in range(B):
             valid_idx = np.nonzero(s2_masks_batch[b])[0]
+            
+            if len(valid_idx) == 0:
+                # 如果该像素所有时刻均为 0，则使用所有时刻的索引（即采样到的结果仍为全 0）
+                valid_idx = np.arange(s2_bands_batch.shape[0])
+            
             if len(valid_idx) < sample_size_s2:
                 idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=True)
             else:
@@ -207,14 +212,16 @@ def main():
                 )  # (B, sample_size_s2, 12) float32
 
                 # S1
-                s1_input_np = sample_s1_batch(
-                    s1_asc_bands_batch, s1_asc_doys_batch,
-                    s1_desc_bands_batch, s1_desc_doys_batch,
-                    band_mean=dataset.s1_band_mean,
-                    band_std=dataset.s1_band_std,
-                    sample_size_s1=config["sample_size_s1"],
-                    standardize=True
-                )  # (B, sample_size_s1, 4) float32
+                # s1_input_np = sample_s1_batch(
+                #     s1_asc_bands_batch, s1_asc_doys_batch,
+                #     s1_desc_bands_batch, s1_desc_doys_batch,
+                #     band_mean=dataset.s1_band_mean,
+                #     band_std=dataset.s1_band_std,
+                #     sample_size_s1=config["sample_size_s1"],
+                #     standardize=True
+                # )  # (B, sample_size_s1, 4) float32
+                # 测试将s1_input_np全变为0
+                s1_input_np = np.zeros((B, config["sample_size_s1"], 4), dtype=np.float32)
 
                 # 转成 Tensor => [B, sample_size_s2, 12]
                 s2_input = torch.tensor(s2_input_np, dtype=torch.float32, device=device)

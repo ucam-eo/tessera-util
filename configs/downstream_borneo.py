@@ -20,7 +20,7 @@ config = {
     "val_ratio": 1/7,  # 剩余部分中验证所占比例
     
     # 训练超参数
-    "batch_size": 1024,
+    "batch_size": 128,
     "epochs": 30,
     "lr": 0.001,
     "weight_decay": 0.01,

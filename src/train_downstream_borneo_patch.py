@@ -433,7 +433,7 @@ def main():
     val_dataset = BorneoDataset(val_rep, val_target)
     test_dataset = BorneoDataset(test_rep, test_target)
     
-    batch_size = 8
+    batch_size = 4
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
@@ -441,9 +441,9 @@ def main():
     # 模型与设备设置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # 使用 UNet 模型
-    # model = UNet(in_channels=128, out_channels=1)
+    model = UNet(in_channels=128, out_channels=1)
     # 使用新的最简单的卷积模型
-    model = SimpleConvNet(in_channels=128, out_channels=1)
+    # model = SimpleConvNet(in_channels=128, out_channels=1)
     # model = FeatureExtractorMobileNetV3(dropout_prob=0.1)
     
     # 打印模型参数个数
@@ -451,7 +451,7 @@ def main():
     print(f"Model has {num_params} parameters.")
     
     # 训练模型
-    train_model(model, train_loader, val_loader, device, epochs=500, lr=1e-3)
+    train_model(model, train_loader, val_loader, device, epochs=200, lr=1e-3)
     
     # 加载最佳的checkpoint再进行测试
     checkpoint_path = os.path.join("checkpoints", "downstream", "best_borneo_patch_ckpt.pth")

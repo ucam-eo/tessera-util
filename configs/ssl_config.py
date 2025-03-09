@@ -2,7 +2,7 @@
 
 config = {
     "data_root": "data/ssl_training/ready_to_use",
-    "batch_size": 512,
+    "batch_size": 1024,
     "epochs": 5,
     "learning_rate": 0.1,
     "barlow_lambda": 5e-3,
@@ -28,18 +28,19 @@ config = {
     "val_labels_path": "data/ssl_training/austrian_crop/fieldtype_17classes_downsample_100.npy",
     "warmup_ratio": 0.2,
     "plateau_ratio": 0.2,
-    "apply_mixup": True,
+    # "apply_mixup": True,
+    "apply_mixup": False,
     "mixup_lambda": 1.0,
     "beta_alpha": 1.0,
     "beta_beta": 1.0,
-    "total_samples": 31000000,
+    "total_samples": 8500000,
     "rust_cmd": (
         "RUST_LOG=debug src/utils/training-data-preprocessing "
-        "--data-root data/ssl_training/global "
+        "--data-root data/ssl_training/sweep_s1_s2_ratio_data "
         "--output-dir data/ssl_training/ready_to_use "
         "--tile-batch 30 "
         "--time-steps 20 "
-        "--chunk-size 1000000 "
+        "--chunk-size 500000 "
         "--min-valid-timesteps 20"
     )
 }

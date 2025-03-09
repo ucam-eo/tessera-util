@@ -1,0 +1,2 @@
+s2nhead,s2layer,s2dim_feedforward,s2non_embedding,s1nhead,s1layer,s1dim_feedforward,s1non_embedding,ratio_s1/s2,alltotal,actual_total
+2,96,128,9576705,2,6,2560,4364289,0.4557,14000000.0,13940994
