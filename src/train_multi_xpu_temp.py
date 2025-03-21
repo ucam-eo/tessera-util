@@ -106,7 +106,7 @@ class ChunkDataset(Dataset):
 ##########################################################################
 def parse_args():
     parser = argparse.ArgumentParser(description="SSL Training (Multi-XPU + chunk-based loading)")
-    parser.add_argument('--config', type=str, default="configs/ssl_config.py",
+    parser.add_argument('--config', type=str, default="configs/ssl_config_temp.py",
                         help="Path to config file (e.g. configs/ssl_config.py)")
     return parser.parse_args()
 
@@ -191,11 +191,11 @@ def main():
     # 3) 构建模型
     ############################################################################
     
-    s2_num_heads = 16
-    s2_num_layers = 8
+    s2_num_heads = 8
+    s2_num_layers = 16
     s2_dim_feedforward = 1024
-    s1_num_heads = 16
-    s1_num_layers = 8
+    s1_num_heads = 8
+    s1_num_layers = 16
     s1_dim_feedforward = 1024
     
     #同步到wandb
@@ -229,8 +229,7 @@ def main():
     ).to(device)
 
     if config['fusion_method'] == 'concat':
-        # proj_in_dim = config['latent_dim'] * 2
-        proj_in_dim = config['latent_dim']
+        proj_in_dim = config['latent_dim'] * 2
     else:
         proj_in_dim = config['latent_dim']
     projector = ProjectionHead(proj_in_dim,
@@ -246,7 +245,7 @@ def main():
         model = MultimodalBTModel(s2_enc, s1_enc, projector,
                                   fusion_method=config['fusion_method'],
                                   return_repr=True).to(device)
-        
+
     criterion = BarlowTwinsLoss(lambda_coeff=config['barlow_lambda'])
 
     if local_rank == 0:
@@ -263,6 +262,22 @@ def main():
     optimizer = torch.optim.AdamW([{'params': weight_params}, {'params': bias_params}],
                             lr=config['learning_rate'], weight_decay=1e-6)
 
+    # optimizer = LARS(
+    #     param_lrs,
+    #     lr=0,
+    #     weight_decay=1e-6,
+    #     momentum=0.9,
+    #     eta=0.001,
+    #     weight_decay_filter=True,
+    #     lars_adaptation_filter=True
+    # )
+    
+    # SGD Optimizer
+    # optimizer = torch.optim.SGD([{'params': weight_params},
+    #                             {'params': bias_params}],
+    #                            lr=config['learning_rate'],
+    #                            momentum=0.9,
+    #                            weight_decay=1e-6)
 
     # 根据apply_amp配置决定是否使用AMP
     if apply_amp:
@@ -279,7 +294,6 @@ def main():
                 device_ids=[local_rank],
                 output_device=local_rank,
                 broadcast_buffers=False,
-                find_unused_parameters=True
                 # find_unused_parameters=False
                 )
 
@@ -565,14 +579,14 @@ def main():
     ############################################################################
     for epoch in range(config['epochs']):
         # rank=0 进程调用rust生成数据（如你需要）
-        # if local_rank == 0:
-        #     aug1_dir = os.path.join(config['data_root'], 'aug1')
-        #     aug2_dir = os.path.join(config['data_root'], 'aug2')
-        #     remove_dir(aug1_dir)
-        #     remove_dir(aug2_dir)
-        #     logging.info(f"Epoch {epoch} started. Generating new training data via rust_cmd...")
-        #     subprocess.run(config['rust_cmd'], shell=True, check=True)
-        #     logging.info(f"Data generation finished for epoch {epoch}.")
+        if local_rank == 0:
+            aug1_dir = os.path.join(config['data_root'], 'aug1')
+            aug2_dir = os.path.join(config['data_root'], 'aug2')
+            remove_dir(aug1_dir)
+            remove_dir(aug2_dir)
+            logging.info(f"Epoch {epoch} started. Generating new training data via rust_cmd...")
+            subprocess.run(config['rust_cmd'], shell=True, check=True)
+            logging.info(f"Data generation finished for epoch {epoch}.")
 
         # 同步，等待数据全部生成
         dist.barrier()

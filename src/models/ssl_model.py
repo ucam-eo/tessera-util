@@ -59,6 +59,25 @@ class MultimodalBTModel(nn.Module):
             if latent_dim is None:
                 raise ValueError("latent_dim must be provided for transformer fusion")
             self.fusion_transformer = FusionTransformer(input_dim=latent_dim, num_layers=1, nhead=4)
+        
+        #added
+        # if fusion_method == 'concat':
+        #     self.dim_reducer = nn.Sequential(
+        #         nn.Linear(1024, 128)
+        #     )
+        # elif fusion_method == 'sum':
+        #     self.dim_reducer = nn.Sequential(
+        #         nn.Linear(512, 128)
+        #     )
+        
+        self.dim_reducer = nn.Sequential(
+            nn.Linear(1024, 128)
+        )
+        # self.dim_reducer = nn.Sequential(
+        #     nn.Linear(1024, 512),
+        #     nn.ReLU(),
+        #     nn.Linear(512, 128)
+        # )
 
     def forward(self, s2_x, s1_x):
         s2_repr = self.s2_backbone(s2_x)
@@ -72,6 +91,8 @@ class MultimodalBTModel(nn.Module):
             fused = self.fusion_transformer(tokens)
         else:
             raise ValueError(f"Unknown fusion method: {self.fusion_method}")
+        # 降维到128
+        fused = self.dim_reducer(fused)
         feats = self.projector(fused)
         if self.return_repr:
             return feats, fused
@@ -82,11 +103,12 @@ class MultimodalBTInferenceModel(torch.nn.Module):
     用于推理阶段的模型，只包含两个Transformer encoder (S2 + S1)，
     去掉了投影头。
     """
-    def __init__(self, s2_backbone, s1_backbone, fusion_method="sum"):
+    def __init__(self, s2_backbone, s1_backbone, fusion_method, dim_reducer):
         super().__init__()
         self.s2_backbone = s2_backbone
         self.s1_backbone = s1_backbone
         self.fusion_method = fusion_method
+        self.dim_reducer = dim_reducer
 
     def forward(self, s2_x, s1_x):
         """
@@ -103,4 +125,5 @@ class MultimodalBTInferenceModel(torch.nn.Module):
             fused = torch.cat([s2_repr, s1_repr], dim=-1)
         else:
             raise ValueError(f"Unknown fusion method: {self.fusion_method}")
+        fused = self.dim_reducer(fused)
         return fused

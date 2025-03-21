@@ -1,15 +1,13 @@
 # configs/ssl_config.py
 
 config = {
-    "data_root": "data/ssl_training/ready_to_use",
+    "data_root": "data/ssl_training/ready_to_use_temp",
     "batch_size": 1024,
-    "epochs": 1,
+    "epochs": 4,
     "learning_rate": 0.005,
     "barlow_lambda": 5e-3,
-    "fusion_method": "concat",  # 可选 'sum', 'concat', 'transformer'
+    "fusion_method": "sum",  # 可选 'sum', 'concat', 'transformer'
     "latent_dim": 128,
-    # "projector_hidden_dim": 512,
-    # "projector_out_dim": 512,
     "projector_hidden_dim": 2048,
     "projector_out_dim": 2048,
     "min_valid_timesteps": 20,
@@ -18,7 +16,7 @@ config = {
     "num_workers": 0,
     "shuffle_tiles": True,
     "log_interval_steps":10,
-    "val_interval_steps": 200,
+    "val_interval_steps": 600,
     "eval_method": "linear_probe",
     "val_s2_bands_file_path": "data/ssl_training/austrian_crop/bands_downsample_100.npy",
     "val_s2_masks_file_path": "data/ssl_training/austrian_crop/masks_downsample_100.npy",
@@ -28,8 +26,7 @@ config = {
     "val_s1_desc_bands_file_path": "data/ssl_training/austrian_crop/sar_descending_downsample_100.npy",
     "val_s1_desc_doy_file_path": "data/ssl_training/austrian_crop/sar_descending_doy.npy",
     "val_labels_path": "data/ssl_training/austrian_crop/fieldtype_17classes_downsample_100.npy",
-    "warmup_ratio": 0.4,
-    # "plateau_ratio": 0.2,
+    "warmup_ratio": 0.3,
     "plateau_ratio": 0,
     "apply_mixup": True,
     # "apply_mixup": False,
@@ -40,7 +37,7 @@ config = {
     "rust_cmd": (
         "RUST_LOG=debug singularity run training-data-preprocessing/training-data-preprocessing.sif "
         "--data-root /home/zf281/rds/rds-sj514-data-WBrUDmBgqOo/s2_s1_global_project/data_processed "
-        "--output-dir data/ssl_training/ready_to_use "
+        "--output-dir data/ssl_training/ready_to_use_temp "
         "--tile-batch 90 "
         "--time-steps 20 "
         "--chunk-size 1000000 "

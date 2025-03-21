@@ -2,7 +2,7 @@
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 import torch
 
 def rankme(z, eps=1e-7):
@@ -18,10 +18,14 @@ def rankme(z, eps=1e-7):
     return rankme_score
 
 def linear_probe_evaluate(model, val_loader, device='cuda'):
+    """
+    使用验证集计算模型嵌入后训练出的 logistic regression 分类器的表现，
+    返回 accuracy, weighted F1 score 以及混淆矩阵。
+    """
     model.eval()
     embeddings_list = []
     labels_list = []
-    max_samples = 20000
+    # max_samples = 20000
     with torch.no_grad():
         for s2_sample, s1_sample, label in val_loader:
             s2_sample = s2_sample.to(device)
@@ -31,14 +35,15 @@ def linear_probe_evaluate(model, val_loader, device='cuda'):
                 out = out[1]
             emb = out.cpu().numpy()
             embeddings_list.append(emb)
-            labels_list.extend(label.numpy())
-            if len(labels_list) >= max_samples:
-                break
+            # 注意：label 可能需要 .cpu() 后再转换成 numpy 数组
+            labels_list.extend(label.cpu().numpy())
+            # if len(labels_list) >= max_samples:
+            #     break
     embeddings = np.concatenate(embeddings_list, axis=0)
     labels_arr = np.array(labels_list, dtype=np.int64)
     N = embeddings.shape[0]
     if N < 2:
-        return 1.0
+        return 1.0, 1.0, None
     np.random.seed(42)
     idx = np.arange(N)
     np.random.shuffle(idx)
@@ -53,4 +58,6 @@ def linear_probe_evaluate(model, val_loader, device='cuda'):
     clf.fit(X_train, y_train)
     pred = clf.predict(X_test)
     acc = accuracy_score(y_test, pred)
-    return acc
+    f1 = f1_score(y_test, pred, average='weighted')
+    cm = confusion_matrix(y_test, pred)
+    return acc, f1, cm

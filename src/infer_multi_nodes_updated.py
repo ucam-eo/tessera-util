@@ -103,6 +103,239 @@ def pre_chunk_files(tile_path, chunk_folder, max_file_size):
         logger.info(f"[Pre-chunk] Saved chunk {chunk_id} files.")
     return chunk_boundaries
 
+def process_chunk(chunk_id, start_row, end_row, model, device, config, node_chunk_folder, 
+                          tile_path, hostname, rank, world_size, logger, max_retries=3):
+    for attempt in range(1, max_retries + 1):
+        logger.info(f"Processing chunk {chunk_id+1}/{len(chunk_boundaries)}, rows {start_row} to {end_row} on node ({hostname}) - Attempt {attempt}/{max_retries}")
+        
+        # When constructing the dataset, pass in the node's chunk_folder, chunk_id, and starting row number
+        dataset = SingleTileInferenceDataset(
+            tile_path=tile_path,
+            chunk_folder=node_chunk_folder,
+            chunk_id=chunk_id,
+            start_row=start_row,
+            min_valid_timesteps=config["min_valid_timesteps"],
+            standardize=False
+        )
+        sampler = DistributedSampler(
+            dataset,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=False,
+            drop_last=False
+        )
+        loader = DataLoader(
+            dataset,
+            batch_size=config["batch_size"],
+            shuffle=False,
+            sampler=sampler,
+            num_workers=config.get("num_workers", 0),
+            pin_memory=True,
+            drop_last=False
+        )
+        logger.info(f"[Chunk {chunk_id}] DataLoader length: {len(loader)}")
+        gidx_list = []
+        vecs_list = []
+        chunk_start_time = time.time()
+        batch_check_time = time.time()
+        timeout_occurred = False
+        
+        with torch.no_grad():
+            for batch_idx, batch_data in enumerate(loader):
+                global_idxs = batch_data["global_idx"].numpy()  # (B,)
+                s2_bands_batch = batch_data["s2_bands"].numpy()
+                s2_masks_batch = batch_data["s2_masks"].numpy()
+                s2_doys_batch  = batch_data["s2_doys"].numpy()
+                s1_asc_bands_batch  = batch_data["s1_asc_bands"].numpy()
+                s1_asc_doys_batch   = batch_data["s1_asc_doys"].numpy()
+                s1_desc_bands_batch = batch_data["s1_desc_bands"].numpy()
+                s1_desc_doys_batch  = batch_data["s1_desc_doys"].numpy()
+                B = s2_bands_batch.shape[0]
+                sum_repr = None
+                
+                # Define the random sampling function (preserving the original logic)
+                def sample_s2_batch(s2_bands_batch, s2_masks_batch, s2_doys_batch,
+                                    band_mean, band_std, sample_size_s2, standardize=True):
+                    B_local = s2_bands_batch.shape[0]
+                    out_list = []
+                    for b in range(B_local):
+                        valid_idx = np.nonzero(s2_masks_batch[b])[0]
+                        if len(valid_idx) == 0:
+                            valid_idx = np.arange(s2_masks_batch.shape[1])
+                        if len(valid_idx) < sample_size_s2:
+                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=True)
+                        else:
+                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=False)
+                        idx_chosen = np.sort(idx_chosen)
+                        sub_bands = s2_bands_batch[b, idx_chosen, :]
+                        sub_doys  = s2_doys_batch[b, idx_chosen]
+                        if standardize:
+                            sub_bands = (sub_bands - dataset.s2_band_mean) / (dataset.s2_band_std + 1e-9)
+                        doys_norm = sub_doys / 365.0
+                        sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+                        cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+                        out_arr = np.hstack([sub_bands, sin_doy, cos_doy])
+                        out_list.append(out_arr.astype(np.float32))
+                    return np.stack(out_list, axis=0).astype(np.float32)
+
+                def sample_s1_batch(s1_asc_bands_batch, s1_asc_doys_batch,
+                                    s1_desc_bands_batch, s1_desc_doys_batch,
+                                    band_mean, band_std, sample_size_s1, standardize=True):
+                    B_local = s1_asc_bands_batch.shape[0]
+                    out_list = []
+                    for b in range(B_local):
+                        s1_bands_all = np.concatenate([s1_asc_bands_batch[b], s1_desc_bands_batch[b]], axis=0)
+                        s1_doys_all  = np.concatenate([s1_asc_doys_batch[b], s1_desc_doys_batch[b]], axis=0)
+                        valid_mask = np.any(s1_bands_all != 0, axis=-1)
+                        valid_idx = np.nonzero(valid_mask)[0]
+                        if len(valid_idx) == 0:
+                            valid_idx = np.arange(s1_bands_all.shape[0])
+                        if len(valid_idx) < sample_size_s1:
+                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s1, replace=True)
+                        else:
+                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s1, replace=False)
+                        idx_chosen = np.sort(idx_chosen)
+                        sub_bands = s1_bands_all[idx_chosen, :]
+                        sub_doys  = s1_doys_all[idx_chosen]
+                        if standardize:
+                            sub_bands = (sub_bands - dataset.s1_band_mean) / (dataset.s1_band_std + 1e-9)
+                        doys_norm = sub_doys / 365.0
+                        sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+                        cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+                        out_arr = np.hstack([sub_bands, sin_doy, cos_doy])
+                        out_list.append(out_arr.astype(np.float32))
+                    return np.stack(out_list, axis=0).astype(np.float32)
+
+                s2_in_np = sample_s2_batch(
+                    s2_bands_batch, s2_masks_batch, s2_doys_batch,
+                    dataset.s2_band_mean, dataset.s2_band_std,
+                    config["sample_size_s2"], True
+                )
+                s1_in_np = sample_s1_batch(
+                    s1_asc_bands_batch, s1_asc_doys_batch,
+                    s1_desc_bands_batch, s1_desc_doys_batch,
+                    dataset.s1_band_mean, dataset.s1_band_std,
+                    config["sample_size_s1"], True
+                )
+                s2_input = torch.tensor(s2_in_np, dtype=torch.float32, device=device)
+                s1_input = torch.tensor(s1_in_np, dtype=torch.float32, device=device)
+                z = model(s2_input, s1_input)
+                if sum_repr is None:
+                    sum_repr = z
+                else:
+                    sum_repr += z
+                avg_repr = sum_repr / float(config["repeat_times"])
+                avg_repr_np = avg_repr.cpu().numpy()
+                gidx_list.append(global_idxs)
+                vecs_list.append(avg_repr_np)
+                
+                if batch_idx % 10 == 0:
+                    current_time = time.time()
+                    if batch_idx >= 0:
+                        batch_time = current_time - batch_check_time
+                        if batch_time > 180:  # 3 minutes = 180 seconds
+                            logger.warning(f"[Chunk {chunk_id}] Batch processing too slow! Last 10 batches took {batch_time:.2f} seconds")
+                            timeout_occurred = True
+                            break
+                    batch_check_time = current_time
+                    
+                    if rank == 0:
+                        logger.info(f"[Chunk {chunk_id}] Batch {batch_idx}, accumulated batches: {len(gidx_list)}")
+            
+            if timeout_occurred:
+                del dataset, loader, gidx_list, vecs_list
+                gc.collect()
+                continue
+                
+        chunk_end_time = time.time()
+        logger.info(f"[Rank {rank}] Finished inference for chunk {chunk_id} in {chunk_end_time - chunk_start_time:.2f} seconds")
+        
+        if len(gidx_list) > 0:
+            local_gidx_np = np.concatenate(gidx_list, axis=0)
+            local_vecs_np = np.concatenate(vecs_list, axis=0)
+        else:
+            local_gidx_np = np.zeros((0,), dtype=np.int64)
+            local_vecs_np = np.zeros((0, config["latent_dim"]), dtype=np.float32)
+        
+        local_size = local_gidx_np.shape[0]
+        local_dim = local_vecs_np.shape[1] if local_size > 0 else config["latent_dim"]
+        logger.info(f"[Chunk {chunk_id}] After accumulation, local_gidx_np.shape={local_gidx_np.shape}, local_vecs_np.shape={local_vecs_np.shape}")
+        
+        local_size_t = torch.tensor([local_size], dtype=torch.long, device=device)
+        size_list_t = [torch.zeros(1, dtype=torch.long, device=device) for _ in range(world_size)]
+        logger.info(f"[Chunk {chunk_id}] Starting all_gather for local sizes")
+        
+        dist.barrier()
+        dist.all_gather(size_list_t, local_size_t)
+        size_list_cpu = [int(t.item()) for t in size_list_t]
+        max_size_chunk = max(size_list_cpu)
+        
+        logger.info(f"[Chunk {chunk_id}] All_gather sizes: {size_list_cpu}, max_size_chunk: {max_size_chunk}")
+        if local_size < max_size_chunk:
+            pad_len = max_size_chunk - local_size
+            pad_idx = np.full((pad_len,), -1, dtype=np.int64)
+            pad_vec = np.zeros((pad_len, local_dim), dtype=np.float32)
+            local_gidx_np = np.concatenate([local_gidx_np, pad_idx], axis=0)
+            local_vecs_np = np.concatenate([local_vecs_np, pad_vec], axis=0)
+        
+        local_gidx_t = torch.from_numpy(local_gidx_np).to(device)
+        local_vecs_t = torch.from_numpy(local_vecs_np).to(device)
+        gather_gidx_list = [torch.zeros((max_size_chunk,), dtype=torch.long, device=device) for _ in range(world_size)]
+        gather_vecs_list = [torch.zeros((max_size_chunk, local_dim), dtype=torch.float32, device=device) for _ in range(world_size)]
+        
+        logger.info(f"[Chunk {chunk_id}] Starting all_gather for gidx and vecs")
+        dist.all_gather(gather_gidx_list, local_gidx_t)
+        dist.all_gather(gather_vecs_list, local_vecs_t)
+        logger.info(f"[Chunk {chunk_id}] Finished all_gather for gidx and vecs")
+        
+        chunk_file = None
+        if rank == 0:
+            final_gidx_list = []
+            final_vecs_list = []
+            for r in range(world_size):
+                real_sz = size_list_cpu[r]
+                if real_sz > 0:
+                    rank_gidx_np = gather_gidx_list[r][:real_sz].cpu().numpy()
+                    rank_vecs_np = gather_vecs_list[r][:real_sz, :local_dim].cpu().numpy()
+                    final_gidx_list.append(rank_gidx_np)
+                    final_vecs_list.append(rank_vecs_np)
+                    logger.info(f"[Chunk {chunk_id}] Gather from rank {r}, real_sz={real_sz}, rank_vecs_np.shape={rank_vecs_np.shape}")
+                else:
+                    logger.info(f"[Chunk {chunk_id}] Gather from rank {r}, real_sz=0, skip")
+            
+            if len(final_gidx_list) == 0:
+                logger.info(f"[Chunk {chunk_id}] All ranks have zero data, nothing to save for this chunk.")
+                chunk_output = np.zeros((end_row - start_row, dataset.W, local_dim), dtype=np.float32)
+            else:
+                final_gidx = np.concatenate(final_gidx_list, axis=0)
+                final_vecs = np.concatenate(final_vecs_list, axis=0)
+                chunk_out_array = np.full(((end_row - start_row) * dataset.W, local_dim), 0, dtype=np.float32)
+                # chunk_out_array[final_gidx] = final_vecs
+                final_gidx = final_gidx - (start_row * dataset.W)
+                chunk_out_array[final_gidx] = final_vecs
+                chunk_output = chunk_out_array.reshape((end_row - start_row, dataset.W, local_dim))
+            
+            chunk_file = f"{os.path.splitext(config['output_npy'])[0]}_chunk_{chunk_id}.npy"
+            # Create the chunk_file folder
+            if not os.path.exists(os.path.dirname(chunk_file)):
+                os.makedirs(os.path.dirname(chunk_file), exist_ok=True)
+            
+            np.save(chunk_file, chunk_output)
+            logger.info(f"[Chunk {chunk_id}] Saved chunk output to {chunk_file} with shape {chunk_output.shape}")
+        
+        del dataset, loader, gidx_list, vecs_list, local_gidx_np, local_vecs_np
+        gc.collect()
+        dist.barrier()
+        return chunk_file
+    
+    # If we reach here, all attempts failed
+    logger.error(f"[Chunk {chunk_id}] Failed to process chunk after {max_retries} attempts due to timeout")
+    if rank == 0:
+        logger.error("Exiting program due to repeated timeouts")
+    dist.barrier()
+    dist.destroy_process_group()
+    sys.exit(1)
+
 def main():
     args = parse_args()
     config_module = load_config_module(args.config)
@@ -183,199 +416,22 @@ def main():
     ).to(device)
     model.eval()
 
-    # Used to store the representation chunk files from each inference chunk (output directory specified in config)
-    representation_chunk_files = []
-
     # Process each chunk sequentially
-    for chunk_id, (start_row, end_row) in enumerate(chunk_boundaries):
-        logger.info(f"Processing chunk {chunk_id+1}/{num_chunks}, rows {start_row} to {end_row} on node ({hostname})")
-        # When constructing the dataset, pass in the node's chunk_folder, chunk_id, and starting row number
-        dataset = SingleTileInferenceDataset(
-            tile_path=tile_path,
-            chunk_folder=node_chunk_folder,
+    for chunk_id, (start_row, end_row) in enumerate(chunk_boundaries): 
+        chunk_file = process_chunk(
             chunk_id=chunk_id,
             start_row=start_row,
-            min_valid_timesteps=config["min_valid_timesteps"],
-            standardize=False
-        )
-        sampler = DistributedSampler(
-            dataset,
-            num_replicas=world_size,
+            end_row=end_row,
+            model=model,
+            device=device,
+            config=config,
+            node_chunk_folder=node_chunk_folder,
+            tile_path=tile_path,
+            hostname=hostname,
             rank=rank,
-            shuffle=False,
-            drop_last=False
+            world_size=world_size,
+            logger=logger
         )
-        loader = DataLoader(
-            dataset,
-            batch_size=config["batch_size"],
-            shuffle=False,
-            sampler=sampler,
-            num_workers=config.get("num_workers", 0),
-            # pin_memory=False,
-            # persistent_workers=False,
-            pin_memory=True,
-            drop_last=False
-        )
-        logger.info(f"[Chunk {chunk_id}] DataLoader length: {len(loader)}")
-        gidx_list = []
-        vecs_list = []
-        chunk_start_time = time.time()
-        with torch.no_grad():
-            for batch_idx, batch_data in enumerate(loader):
-                global_idxs = batch_data["global_idx"].numpy()  # (B,)
-                s2_bands_batch = batch_data["s2_bands"].numpy()
-                s2_masks_batch = batch_data["s2_masks"].numpy()
-                s2_doys_batch  = batch_data["s2_doys"].numpy()
-                s1_asc_bands_batch  = batch_data["s1_asc_bands"].numpy()
-                s1_asc_doys_batch   = batch_data["s1_asc_doys"].numpy()
-                s1_desc_bands_batch = batch_data["s1_desc_bands"].numpy()
-                s1_desc_doys_batch  = batch_data["s1_desc_doys"].numpy()
-                B = s2_bands_batch.shape[0]
-                sum_repr = None
-                # Define the random sampling function (preserving the original logic)
-                def sample_s2_batch(s2_bands_batch, s2_masks_batch, s2_doys_batch,
-                                    band_mean, band_std, sample_size_s2, standardize=True):
-                    B_local = s2_bands_batch.shape[0]
-                    out_list = []
-                    for b in range(B_local):
-                        valid_idx = np.nonzero(s2_masks_batch[b])[0]
-                        if len(valid_idx) == 0:
-                            valid_idx = np.arange(s2_masks_batch.shape[1])
-                        if len(valid_idx) < sample_size_s2:
-                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=True)
-                        else:
-                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=False)
-                        idx_chosen = np.sort(idx_chosen)
-                        sub_bands = s2_bands_batch[b, idx_chosen, :]
-                        sub_doys  = s2_doys_batch[b, idx_chosen]
-                        if standardize:
-                            sub_bands = (sub_bands - dataset.s2_band_mean) / (dataset.s2_band_std + 1e-9)
-                        doys_norm = sub_doys / 365.0
-                        sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-                        cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-                        out_arr = np.hstack([sub_bands, sin_doy, cos_doy])
-                        out_list.append(out_arr.astype(np.float32))
-                    return np.stack(out_list, axis=0).astype(np.float32)
-
-                def sample_s1_batch(s1_asc_bands_batch, s1_asc_doys_batch,
-                                    s1_desc_bands_batch, s1_desc_doys_batch,
-                                    band_mean, band_std, sample_size_s1, standardize=True):
-                    B_local = s1_asc_bands_batch.shape[0]
-                    out_list = []
-                    for b in range(B_local):
-                        s1_bands_all = np.concatenate([s1_asc_bands_batch[b], s1_desc_bands_batch[b]], axis=0)
-                        s1_doys_all  = np.concatenate([s1_asc_doys_batch[b], s1_desc_doys_batch[b]], axis=0)
-                        valid_mask = np.any(s1_bands_all != 0, axis=-1)
-                        valid_idx = np.nonzero(valid_mask)[0]
-                        if len(valid_idx) == 0:
-                            valid_idx = np.arange(s1_bands_all.shape[0])
-                        if len(valid_idx) < sample_size_s1:
-                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s1, replace=True)
-                        else:
-                            idx_chosen = np.random.choice(valid_idx, size=sample_size_s1, replace=False)
-                        idx_chosen = np.sort(idx_chosen)
-                        sub_bands = s1_bands_all[idx_chosen, :]
-                        sub_doys  = s1_doys_all[idx_chosen]
-                        if standardize:
-                            sub_bands = (sub_bands - dataset.s1_band_mean) / (dataset.s1_band_std + 1e-9)
-                        doys_norm = sub_doys / 365.0
-                        sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-                        cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-                        out_arr = np.hstack([sub_bands, sin_doy, cos_doy])
-                        out_list.append(out_arr.astype(np.float32))
-                    return np.stack(out_list, axis=0).astype(np.float32)
-
-                s2_in_np = sample_s2_batch(
-                    s2_bands_batch, s2_masks_batch, s2_doys_batch,
-                    dataset.s2_band_mean, dataset.s2_band_std,
-                    config["sample_size_s2"], True
-                )
-                s1_in_np = sample_s1_batch(
-                    s1_asc_bands_batch, s1_asc_doys_batch,
-                    s1_desc_bands_batch, s1_desc_doys_batch,
-                    dataset.s1_band_mean, dataset.s1_band_std,
-                    config["sample_size_s1"], True
-                )
-                s2_input = torch.tensor(s2_in_np, dtype=torch.float32, device=device)
-                s1_input = torch.tensor(s1_in_np, dtype=torch.float32, device=device)
-                z = model(s2_input, s1_input)
-                if sum_repr is None:
-                    sum_repr = z
-                else:
-                    sum_repr += z
-                avg_repr = sum_repr / float(config["repeat_times"])
-                avg_repr_np = avg_repr.cpu().numpy()
-                gidx_list.append(global_idxs)
-                vecs_list.append(avg_repr_np)
-                if rank == 0 and batch_idx % 10 == 0:
-                    logger.info(f"[Chunk {chunk_id}] Batch {batch_idx}, accumulated batches: {len(gidx_list)}")
-        chunk_end_time = time.time()
-        logger.info(f"[Rank {rank}] Finished inference for chunk {chunk_id} in {chunk_end_time - chunk_start_time:.2f} seconds")
-        if len(gidx_list) > 0:
-            local_gidx_np = np.concatenate(gidx_list, axis=0)
-            local_vecs_np = np.concatenate(vecs_list, axis=0)
-        else:
-            local_gidx_np = np.zeros((0,), dtype=np.int64)
-            local_vecs_np = np.zeros((0, config["latent_dim"]), dtype=np.float32)
-        local_size = local_gidx_np.shape[0]
-        local_dim = local_vecs_np.shape[1] if local_size > 0 else config["latent_dim"]
-        logger.info(f"[Chunk {chunk_id}] After accumulation, local_gidx_np.shape={local_gidx_np.shape}, local_vecs_np.shape={local_vecs_np.shape}")
-        local_size_t = torch.tensor([local_size], dtype=torch.long, device=device)
-        size_list_t = [torch.zeros(1, dtype=torch.long, device=device) for _ in range(world_size)]
-        logger.info(f"[Chunk {chunk_id}] Starting all_gather for local sizes")
-        dist.barrier()
-        dist.all_gather(size_list_t, local_size_t)
-        size_list_cpu = [int(t.item()) for t in size_list_t]
-        max_size_chunk = max(size_list_cpu)
-        logger.info(f"[Chunk {chunk_id}] All_gather sizes: {size_list_cpu}, max_size_chunk: {max_size_chunk}")
-        if local_size < max_size_chunk:
-            pad_len = max_size_chunk - local_size
-            pad_idx = np.full((pad_len,), -1, dtype=np.int64)
-            pad_vec = np.zeros((pad_len, local_dim), dtype=np.float32)
-            local_gidx_np = np.concatenate([local_gidx_np, pad_idx], axis=0)
-            local_vecs_np = np.concatenate([local_vecs_np, pad_vec], axis=0)
-        local_gidx_t = torch.from_numpy(local_gidx_np).to(device)
-        local_vecs_t = torch.from_numpy(local_vecs_np).to(device)
-        gather_gidx_list = [torch.zeros((max_size_chunk,), dtype=torch.long, device=device) for _ in range(world_size)]
-        gather_vecs_list = [torch.zeros((max_size_chunk, local_dim), dtype=torch.float32, device=device) for _ in range(world_size)]
-        logger.info(f"[Chunk {chunk_id}] Starting all_gather for gidx and vecs")
-        dist.all_gather(gather_gidx_list, local_gidx_t)
-        dist.all_gather(gather_vecs_list, local_vecs_t)
-        logger.info(f"[Chunk {chunk_id}] Finished all_gather for gidx and vecs")
-        if rank == 0:
-            final_gidx_list = []
-            final_vecs_list = []
-            for r in range(world_size):
-                real_sz = size_list_cpu[r]
-                if real_sz > 0:
-                    rank_gidx_np = gather_gidx_list[r][:real_sz].cpu().numpy()
-                    rank_vecs_np = gather_vecs_list[r][:real_sz, :local_dim].cpu().numpy()
-                    final_gidx_list.append(rank_gidx_np)
-                    final_vecs_list.append(rank_vecs_np)
-                    logger.info(f"[Chunk {chunk_id}] Gather from rank {r}, real_sz={real_sz}, rank_vecs_np.shape={rank_vecs_np.shape}")
-                else:
-                    logger.info(f"[Chunk {chunk_id}] Gather from rank {r}, real_sz=0, skip")
-            if len(final_gidx_list) == 0:
-                logger.info(f"[Chunk {chunk_id}] All ranks have zero data, nothing to save for this chunk.")
-                chunk_output = np.zeros((end_row - start_row, dataset.W, local_dim), dtype=np.float32)
-            else:
-                final_gidx = np.concatenate(final_gidx_list, axis=0)
-                final_vecs = np.concatenate(final_vecs_list, axis=0)
-                chunk_out_array = np.full(((end_row - start_row) * dataset.W, local_dim), 0, dtype=np.float32)
-                # chunk_out_array[final_gidx] = final_vecs
-                final_gidx = final_gidx - (start_row * dataset.W)
-                chunk_out_array[final_gidx] = final_vecs
-                chunk_output = chunk_out_array.reshape((end_row - start_row, dataset.W, local_dim))
-            chunk_file = f"{os.path.splitext(config['output_npy'])[0]}_chunk_{chunk_id}.npy"
-            # Create the chunk_file folder
-            if not os.path.exists(os.path.dirname(chunk_file)):
-                os.makedirs(os.path.dirname(chunk_file), exist_ok=True)
-            np.save(chunk_file, chunk_output)
-            logger.info(f"[Chunk {chunk_id}] Saved chunk output to {chunk_file} with shape {chunk_output.shape}")
-            representation_chunk_files.append(chunk_file)
-        del dataset, loader, gidx_list, vecs_list, local_gidx_np, local_vecs_np
-        gc.collect()
-        dist.barrier()
 
     # After all chunks are completed, global rank 0 merges the representation chunk files from each node (output directory is shared)
     if rank == 0:

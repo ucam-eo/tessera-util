@@ -52,7 +52,8 @@
 
 import numpy as np
 
-file_path = "data/ssl_training/global/11TLK/bands.npy"
+file_path = "/home/zf281/rds/rds-sj514-data-WBrUDmBgqOo/s2_s1_global_project/pastis/pastis_patch_d-pixel/10000/bands.npy"
 data = np.load(file_path, mmap_mode='r')
 print(data.shape)
-print(data[20, 100:110, 100:110, 1])  # 0.0
+print(data)
+# print(data[20, 100:110, 100:110, 1])  # 0.0

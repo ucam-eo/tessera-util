@@ -11,6 +11,7 @@
 #SBATCH --output=log/sweep_s1_s2_ratio_%A_%a.log
 #SBATCH --error=log/sweep_s1_s2_ratio_%A_%a.log
 #SBATCH --array=0-3                # 每个节点上启动4个任务
+#SBATCH --exclusive
 
 # 加载模块及环境
 module purge

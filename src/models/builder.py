@@ -6,8 +6,8 @@ def build_ssl_model(config, device):
     s2_backbone_ssl = TransformerEncoder(
         band_num=12,
         latent_dim=config['latent_dim'],
-        nhead=16,
-        num_encoder_layers=32,
+        nhead=8,
+        num_encoder_layers=16,
         dim_feedforward=512,
         dropout=0.1,
         max_seq_len=20
@@ -15,14 +15,15 @@ def build_ssl_model(config, device):
     s1_backbone_ssl = TransformerEncoder(
         band_num=4,
         latent_dim=config['latent_dim'],
-        nhead=16,
-        num_encoder_layers=32,
+        nhead=8,
+        num_encoder_layers=16,
         dim_feedforward=512,
         dropout=0.1,
         max_seq_len=20
     )
     if config["fusion_method"] == "concat":
-        input_dim_for_projector = config['latent_dim'] * 2
+        # input_dim_for_projector = config['latent_dim'] * 2
+        input_dim_for_projector = config['latent_dim']
     else:
         input_dim_for_projector = config['latent_dim']
     projector_ssl = ProjectionHead(input_dim_for_projector,

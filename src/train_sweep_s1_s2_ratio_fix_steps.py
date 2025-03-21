@@ -20,9 +20,6 @@ import numpy as np
 import wandb
 import subprocess
 
-# 需要安装 ptflops，例如 "pip install ptflops"
-from ptflops import get_model_complexity_info
-
 # --- 导入原有的模块 ---
 from datasets.ssl_dataset import HDF5Dataset_Multimodal_Tiles_Iterable, AustrianCropValidation
 from models.modules import TransformerEncoder, ProjectionHead
@@ -43,13 +40,28 @@ HOST_NAME = "DAWN"                 # 用于标识机器
 # ------------------------------------
 #   1.  加载 CSV 到内存中（使用 csv 模块）
 # ------------------------------------
-ALL_ROWS = {}
-with open(CSV_PATH, newline='', encoding='utf-8') as csvfile:
+def parse_value(val):
+    try:
+        if '.' in val:
+            return float(val)
+        else:
+            return int(val)
+    except:
+        return val
+
+ALL_ROWS = []
+with open(CSV_PATH, newline='') as csvfile:
     reader = csv.DictReader(csvfile)
-    for i, row in enumerate(reader):
-        ALL_ROWS[i] = row
-N_ROWS = len(ALL_ROWS)
-logging.info(f"Loaded {N_ROWS} rows from CSV.")
+    for row in reader:
+        new_row = {}
+        for key, value in row.items():
+            # 将 "ratio_s1/s2" 重命名为 "ratio_s1_s2"
+            if key == "ratio_s1/s2":
+                new_row["ratio_s1_s2"] = parse_value(value)
+            else:
+                new_row[key] = parse_value(value)
+        ALL_ROWS.append(new_row)
+logging.info(f"Loaded {len(ALL_ROWS)} rows from CSV.")
 
 # ----------------------------------------------------------------------
 #   生成唯一 experiment_id（基于超参数）
@@ -57,7 +69,7 @@ logging.info(f"Loaded {N_ROWS} rows from CSV.")
 def compute_experiment_id(config):
     keys = ["s2nhead", "s2layer", "s2dim_feedforward", "s2non_embedding",
             "s1nhead", "s1layer", "s1dim_feedforward", "s1non_embedding",
-            "ratio_s1/s2", "alltotal", "actual_total"]
+            "ratio_s1_s2", "alltotal", "actual_total"]
     id_parts = [str(config.get(k)) for k in keys]
     return "_".join(id_parts)
 
@@ -111,8 +123,9 @@ def train_and_evaluate():
                 logging.error(f"Could not delete the run from W&B: {ex_del}")
             return
         
-        if float(row_data["actual_total"]) <= 20000000:  # 太小的模型不需要用DAWN跑
-            print("Skipping configuration because actual_total <= 16M")
+        logging.info(f"Starting run for row_index={row_idx}, actual_total={row_data['actual_total']}")
+        if float(row_data["actual_total"]) <= 20000000 or float(row_data["actual_total"]) > 100000000:
+            print("Skipping configuration because actual_total <= 16M or > 100M")
             wandb.log({"status": "skip_due_to_actual_total"})
             run.finish()
             try:
@@ -137,7 +150,7 @@ def train_and_evaluate():
 
         s2non_embedding = final_config["s2non_embedding"]
         s1non_embedding = final_config["s1non_embedding"]
-        ratio = final_config["ratio_s1/s2"]
+        ratio = final_config["ratio_s1_s2"]
         alltotal = final_config["alltotal"]
         actual_total = final_config["actual_total"]
 
@@ -179,7 +192,6 @@ def train_and_evaluate():
             "val_labels_path": "data/ssl_training/austrian_crop/fieldtype_17classes_downsample_100.npy"
         }
 
-        # 根据总样本数和 batch_size 计算总步长（只训练一个 epoch）
         total_steps = int(training_config["total_samples"] / training_config["batch_size"])
         wandb.config["computed_total_steps"] = total_steps
         logging.info(f"Row={row_idx}: total_steps={total_steps}")
@@ -421,22 +433,12 @@ def main():
                         help="使用 'init' 初始化 sweep 或 'agent' 运行 agent。")
     args = parser.parse_args()
 
+    # 修改后的 sweep_config 仅使用 "row_index" 作为超参数，并设置搜索方法为 random
     sweep_config = {
         "method": "random",
         "metric": {"goal": "maximize", "name": "val_acc"},
         "parameters": {
-            "row_index": {"values": list(range(N_ROWS))},
-            "s2nhead": {"values": [int(row["s2nhead"]) for row in ALL_ROWS.values()]},
-            "s2layer": {"values": [int(row["s2layer"]) for row in ALL_ROWS.values()]},
-            "s2dim_feedforward": {"values": [int(row["s2dim_feedforward"]) for row in ALL_ROWS.values()]},
-            "s2non_embedding": {"values": [row["s2non_embedding"] for row in ALL_ROWS.values()]},
-            "s1nhead": {"values": [int(row["s1nhead"]) for row in ALL_ROWS.values()]},
-            "s1layer": {"values": [int(row["s1layer"]) for row in ALL_ROWS.values()]},
-            "s1dim_feedforward": {"values": [int(row["s1dim_feedforward"]) for row in ALL_ROWS.values()]},
-            "s1non_embedding": {"values": [row["s1non_embedding"] for row in ALL_ROWS.values()]},
-            "ratio_s1/s2": {"values": [float(row["ratio_s1/s2"]) for row in ALL_ROWS.values()]},
-            "alltotal": {"values": [float(row["alltotal"]) for row in ALL_ROWS.values()]},
-            "actual_total": {"values": [float(row["actual_total"]) for row in ALL_ROWS.values()]}
+            "row_index": {"values": list(range(len(ALL_ROWS)))}
         }
     }
 
@@ -448,7 +450,7 @@ def main():
         print("Created sweep with ID:", sweep_id)
     elif args.mode == "agent":
         wandb.agent(
-            sweep_id="ztg9m4tz",  # 请确保使用实际的 sweep_id
+            sweep_id="j5avvm4x",  # 请确保使用实际的 sweep_id
             function=train_and_evaluate,
             project="btfm-param-sweep-s1-s2-ratio-s1-s2-ratio",
             entity="frankfeng1223",

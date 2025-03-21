@@ -19,4 +19,4 @@ sintr -t 06:00:00 -N1 -n38 -A KESHAV-SL3-CPU -p icelake
 
 rsync -av --ignore-existing zf281@kinabalu.cl.cam.ac.uk:/maps/zf281/btfm-data-preparation/s2_s1_global_project/data_processed/ /home/zf281/rds/hpc-work/Files/btfm/data/global/
 
-rsync -avzP zf281@daintree.cl.cam.ac.uk:/scratch/zf281/robin/fungal/data_processed/34VEH .
+rsync -avzP zf281@daintree.cl.cam.ac.uk:/scratch/zf281/robin/fungal/data_processed/34VFJ .

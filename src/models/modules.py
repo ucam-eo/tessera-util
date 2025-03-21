@@ -3,6 +3,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
+import numpy as np
 
 class AttentionPooling(nn.Module):
     def __init__(self, input_dim):
@@ -12,19 +14,70 @@ class AttentionPooling(nn.Module):
         # x: (B, seq_len, dim)
         w = torch.softmax(self.query(x), dim=1)  # (B, seq_len, 1)
         return (w * x).sum(dim=1)
+    
+
+class MultiHeadAttentionPooling(nn.Module):
+    def __init__(self, input_dim, num_heads=16):
+        super().__init__()
+        self.mha = nn.MultiheadAttention(input_dim, num_heads, batch_first=True)
+        self.query = nn.Parameter(torch.randn(1, 1, input_dim))
+        
+    def forward(self, x):
+        # x: (B, seq_len, dim)
+        batch_size = x.shape[0]
+        query = self.query.expand(batch_size, -1, -1)
+        
+        # Apply multi-head attention
+        pooled, _ = self.mha(query, x, x)
+        return pooled.squeeze(1)  # (B, dim)
+
+# class TransformerEncoder(nn.Module):
+#     def __init__(self, band_num, latent_dim, nhead=8, num_encoder_layers=4,
+#                  dim_feedforward=512, dropout=0.1, max_seq_len=20):
+#         super().__init__()
+#         self.embedding = nn.Sequential(
+#             nn.Linear(band_num, latent_dim),
+#             nn.ReLU(),
+#             nn.Linear(latent_dim, latent_dim)
+#         )
+#         self.pos_encoder = nn.Parameter(torch.randn(1, max_seq_len, latent_dim))
+#         encoder_layer = nn.TransformerEncoderLayer(
+#             d_model=latent_dim,
+#             nhead=nhead,
+#             dim_feedforward=dim_feedforward,
+#             dropout=dropout,
+#             activation="relu",
+#             batch_first=False
+#         )
+#         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
+#         self.attn_pool = AttentionPooling(latent_dim)
+#         self.fc_out = nn.Linear(latent_dim, latent_dim)
+#     def forward(self, x):
+#         # x: (B, seq_len, band_num)
+#         b, s, _ = x.shape
+#         x = self.embedding(x)
+#         x = x + self.pos_encoder[:, :s, :]
+#         x = x.permute(1, 0, 2)  # (seq_len, B, latent_dim)
+#         x = self.transformer_encoder(x)
+#         x = x.permute(1, 0, 2)  # (B, seq_len, latent_dim)
+#         x = self.attn_pool(x)
+#         x = self.fc_out(x)
+#         return x
 
 class TransformerEncoder(nn.Module):
     def __init__(self, band_num, latent_dim, nhead=8, num_encoder_layers=4,
                  dim_feedforward=512, dropout=0.1, max_seq_len=20):
         super().__init__()
+        # 将 embedding 维度提升到 latent_dim*4
         self.embedding = nn.Sequential(
-            nn.Linear(band_num, latent_dim),
+            nn.Linear(band_num, latent_dim * 4),
             nn.ReLU(),
-            nn.Linear(latent_dim, latent_dim)
+            nn.Linear(latent_dim * 4, latent_dim * 4)
         )
-        self.pos_encoder = nn.Parameter(torch.randn(1, max_seq_len, latent_dim))
+        self.pos_encoder = nn.Parameter(torch.randn(1, max_seq_len, latent_dim * 4))
+        
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=latent_dim,
+            d_model=latent_dim * 4,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
@@ -32,19 +85,24 @@ class TransformerEncoder(nn.Module):
             batch_first=False
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-        self.attn_pool = AttentionPooling(latent_dim)
-        self.fc_out = nn.Linear(latent_dim, latent_dim)
+        
+        self.attn_pool = AttentionPooling(latent_dim * 4)
+        # self.attn_pool = MultiHeadAttentionPooling(latent_dim * 4)
+        # 降维到 latent_dim
+        self.fc_out = nn.Linear(latent_dim * 4, latent_dim)
+    
     def forward(self, x):
         # x: (B, seq_len, band_num)
         b, s, _ = x.shape
-        x = self.embedding(x)
+        x = self.embedding(x)  # (B, seq_len, latent_dim*4)
         x = x + self.pos_encoder[:, :s, :]
-        x = x.permute(1, 0, 2)  # (seq_len, B, latent_dim)
+        x = x.permute(1, 0, 2)  # (seq_len, B, latent_dim*4)
         x = self.transformer_encoder(x)
-        x = x.permute(1, 0, 2)  # (B, seq_len, latent_dim)
+        x = x.permute(1, 0, 2)  # (B, seq_len, latent_dim*4)
         x = self.attn_pool(x)
-        x = self.fc_out(x)
+        # x = self.fc_out(x)
         return x
+
 
 class ProjectionHead(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):

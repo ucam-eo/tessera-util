@@ -14,10 +14,10 @@ from datetime import datetime
 
 import numpy as np
 import torch
-import torch.amp  # <-- 关键改动：使用torch.amp，而不是torch.xpu.amp
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+import torch.amp  # 使用 torch.amp
+# 删除分布式相关的 import
+#from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import Dataset, DataLoader
 
 import intel_extension_for_pytorch as ipex
 import oneccl_bindings_for_pytorch
@@ -31,8 +31,6 @@ from models.ssl_model import MultimodalBTModel, BarlowTwinsLoss, compute_cross_c
 from utils.lr_scheduler import adjust_learning_rate, LARS
 from utils.metrics import linear_probe_evaluate, rankme
 from utils.misc import remove_dir, save_checkpoint, plot_cross_corr
-
-# mpirun -n 8 python src/train_multi_xpu.py
 
 ##########################################################################
 # 1) 一个用于加载"部分文件"的Dataset类
@@ -73,8 +71,6 @@ class ChunkDataset(Dataset):
                 arr_aug2_s1.shape[0]
             )
             for i in range(n_samples):
-                # 在这里若有标准化需求，可以先行处理，
-                # 或者在 __getitem__ 中做都行。
                 self.all_samples.append((
                     arr_aug1_s2[i],
                     arr_aug2_s2[i],
@@ -88,7 +84,6 @@ class ChunkDataset(Dataset):
         return len(self.all_samples)
 
     def __getitem__(self, index):
-        # 读出4块数据并转换成Tensor
         s2_aug1_np, s2_aug2_np, s1_aug1_np, s1_aug2_np = self.all_samples[index]
         s2_aug1 = torch.tensor(s2_aug1_np, dtype=torch.float32)
         s2_aug2 = torch.tensor(s2_aug2_np, dtype=torch.float32)
@@ -102,113 +97,71 @@ class ChunkDataset(Dataset):
         }
 
 ##########################################################################
-# 2) 主训练脚本 (多XPU + chunk-based loading)
+# 2) 主训练脚本 (单个XPU训练)
 ##########################################################################
 def parse_args():
-    parser = argparse.ArgumentParser(description="SSL Training (Multi-XPU + chunk-based loading)")
-    parser.add_argument('--config', type=str, default="configs/ssl_config.py",
+    parser = argparse.ArgumentParser(description="SSL Training (Single-XPU)")
+    parser.add_argument('--config', type=str, default="configs/ssl_config_temp.py",
                         help="Path to config file (e.g. configs/ssl_config.py)")
     return parser.parse_args()
 
 def main():
-    #设置初始化种子
+    # 设置初始化种子
     torch.manual_seed(3407)
     np.random.seed(3407)
-    ############################################################################
-    # 0) 初始化分布式环境 (oneCCL + PyTorch)
-    ############################################################################
-    mpi_world_size = int(os.environ.get('PMI_SIZE', '-1'))
-    mpi_rank = int(os.environ.get('PMI_RANK', '-1'))
-    if mpi_world_size > 0:
-        os.environ['WORLD_SIZE'] = str(mpi_world_size)
-        os.environ['RANK'] = str(mpi_rank)
-    else:
-        os.environ['WORLD_SIZE'] = os.environ.get('WORLD_SIZE', '1')
-        os.environ['RANK'] = os.environ.get('RANK', '0')
 
-    os.environ['MASTER_ADDR'] = os.environ.get('MASTER_ADDR', '127.0.0.1')
-    os.environ['MASTER_PORT'] = os.environ.get('MASTER_PORT', '29500')
-    
-    # init_method   = 'tcp://' + os.environ["MASTER_ADDR"] + ':' + os.environ["MASTER_PORT"]
-    # dist.init_process_group(backend='ccl',init_method=init_method, rank=mpi_rank, world_size=mpi_world_size)
-    
-    dist.init_process_group(backend='ccl')
-    global_rank = dist.get_rank()
-    world_size = dist.get_world_size()
-    local_rank = global_rank
+    # 单机单卡设置：local_rank = 0, world_size = 1
+    local_rank = 0
+    world_size = 1
 
-    ############################################################################
-    # 1) 解析命令行 & 读取配置
-    ############################################################################
+    # 配置日志：单设备全部输出info日志
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    # 使用整数设备索引和torch.device
+    device = torch.device("xpu:0")
+    torch.xpu.set_device(device)
+    logging.info(f"Running on a single XPU, device={device}")
+
+    # 解析命令行 & 读取配置
     args_cli = parse_args()
     config_module = {}
     with open(args_cli.config, "r") as f:
         exec(f.read(), config_module)
     config = config_module['config']
 
-    # 新增：根据配置文件中的apply_amp字段决定是否启用AMP，默认为False
+    # 根据配置文件中的apply_amp字段决定是否启用AMP，默认为False
     apply_amp = config.get('apply_amp', False)
-    if local_rank == 0:
-        logging.info(f"apply_amp = {apply_amp}")
+    logging.info(f"apply_amp = {apply_amp}")
 
-    # rank=0 输出info日志，其它只输出warning
-    if local_rank == 0:
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
-        
-    else:
-        logging.basicConfig(level=logging.WARNING,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
-        os.environ['WANDB_MODE'] = 'disabled'  # 屏蔽多余rank的W&B日志
-
-    # 修改：使用整数设备索引和torch.device
-    device = torch.device("xpu", local_rank)
-    # device = torch.device("xpu:0")
-    torch.xpu.set_device(device)
-    if local_rank == 0:
-        logging.info(f"Running on {world_size} XPU(s). LocalRank={local_rank}, device={device}")
-
-    # 读取 chunk_batch 配置
-    chunk_batch = config.get('chunk_batch', 40)
-    if local_rank == 0:
-        logging.info(f"chunk_batch = {chunk_batch}")
-
-    ############################################################################
-    # 2) 准备W&B
-    ############################################################################
+    # 准备W&B
     run_name = f"BT_Iter_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    if local_rank == 0:
-        wandb_run = wandb.init(project="btfm-iterable", name=run_name, config=config)
-    else:
-        wandb_run = None
+    wandb_run = wandb.init(project="btfm-iterable", name=run_name, config=config)
 
     # 计算总训练步数（可能并不精准，因为我们分块加载）
     total_steps = config['epochs'] * config['total_samples'] // config['batch_size'] // world_size
-    if local_rank == 0:
-        logging.info(f"Total steps per rank (approx) = {total_steps}")
+    logging.info(f"Total steps (approx) = {total_steps}")
 
     ############################################################################
     # 3) 构建模型
     ############################################################################
-    
-    s2_num_heads = 16
-    s2_num_layers = 8
-    s2_dim_feedforward = 1024
-    s1_num_heads = 16
-    s1_num_layers = 8
-    s1_dim_feedforward = 1024
-    
-    #同步到wandb
-    if local_rank == 0:
-        wandb.config.update({
-            "s2_num_heads": s2_num_heads,
-            "s2_num_layers": s2_num_layers,
-            "s2_dim_feedforward": s2_dim_feedforward,
-            "s1_num_heads": s1_num_heads,
-            "s1_num_layers": s1_num_layers,
-            "s1_dim_feedforward": s1_dim_feedforward
-        })
-    
+    s2_num_heads = 8
+    s2_num_layers = 16
+    s2_dim_feedforward = 512
+    s1_num_heads = 8
+    s1_num_layers = 16
+    s1_dim_feedforward = 512
+
+    # 同步到 wandb
+    wandb.config.update({
+        "s2_num_heads": s2_num_heads,
+        "s2_num_layers": s2_num_layers,
+        "s2_dim_feedforward": s2_dim_feedforward,
+        "s1_num_heads": s1_num_heads,
+        "s1_num_layers": s1_num_layers,
+        "s1_dim_feedforward": s1_dim_feedforward
+    })
+
     s2_enc = TransformerEncoder(
         band_num=12,  # 例如 10个波段+sin/cos
         latent_dim=config['latent_dim'],
@@ -229,8 +182,7 @@ def main():
     ).to(device)
 
     if config['fusion_method'] == 'concat':
-        # proj_in_dim = config['latent_dim'] * 2
-        proj_in_dim = config['latent_dim']
+        proj_in_dim = config['latent_dim'] * 2
     else:
         proj_in_dim = config['latent_dim']
     projector = ProjectionHead(proj_in_dim,
@@ -246,23 +198,20 @@ def main():
         model = MultimodalBTModel(s2_enc, s1_enc, projector,
                                   fusion_method=config['fusion_method'],
                                   return_repr=True).to(device)
-        
+
     criterion = BarlowTwinsLoss(lambda_coeff=config['barlow_lambda'])
 
-    if local_rank == 0:
-        num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        logging.info(f"Model has {num_params} trainable parameters.")
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logging.info(f"Model has {num_params} trainable parameters.")
 
     weight_params = [p for n, p in model.named_parameters() if p.ndim > 1]
     bias_params   = [p for n, p in model.named_parameters() if p.ndim == 1]
     param_lrs = [{'params': weight_params}, {'params': bias_params}]
-    
-    if local_rank == 0:
-        logging.info(f"Model has {sum(p.numel() for p in model.parameters() if p.requires_grad)} trainable parameters.")
+
+    logging.info(f"Model has {sum(p.numel() for p in model.parameters() if p.requires_grad)} trainable parameters.")
     
     optimizer = torch.optim.AdamW([{'params': weight_params}, {'params': bias_params}],
-                            lr=config['learning_rate'], weight_decay=1e-6)
-
+                                  lr=config['learning_rate'], weight_decay=1e-6)
 
     # 根据apply_amp配置决定是否使用AMP
     if apply_amp:
@@ -270,23 +219,15 @@ def main():
     else:
         scaler = None
 
-    # IPEX优化 & DDP封装
+    # IPEX优化
     model, optimizer = ipex.optimize(model, optimizer=optimizer,
                                      dtype=torch.float32,
-                                    #  auto_kernel_selection=False,
                                      inplace=False)
-    model = DDP(model,
-                device_ids=[local_rank],
-                output_device=local_rank,
-                broadcast_buffers=False,
-                find_unused_parameters=True
-                # find_unused_parameters=False
-                )
+    # 单卡训练，无需 DDP 封装
 
     ############################################################################
-    # 4) 训练循环 (chunk-based) — 我们将分块训练的逻辑封装成一个函数
+    # 4) 训练循环 (chunk-based) — 分块加载训练
     ############################################################################
-
     def _train_one_chunk(
         chunk_files,
         epoch,
@@ -297,9 +238,8 @@ def main():
         rolling_loss
     ):
         """
-        针对给定的一批文件(chunk_files)，构建ChunkDataset和DataLoader，
+        针对给定的一批文件(chunk_files)，构造ChunkDataset和DataLoader，
         并在这一批数据上训练若干step。返回更新后的 step / examples 等。
-        这样做可以在函数结束时确保内存引用被清除。
         """
         # 构造4组文件路径列表
         aug1_s2_dir = os.path.join(config['data_root'], 'aug1', 's2')
@@ -319,26 +259,22 @@ def main():
             aug1_s1_files=aug1_s1_paths,
             aug2_s1_files=aug2_s1_paths
         )
-        train_sampler = DistributedSampler(chunk_dataset, shuffle=False, drop_last=True)
-        
+        # 单卡训练，无需DistributedSampler，直接使用DataLoader
         train_loader = DataLoader(
             chunk_dataset,
             batch_size=config['batch_size'],
-            sampler=train_sampler,
+            shuffle=False,
             num_workers=config['num_workers'],
             drop_last=True,
-            pin_memory=False, # 这里可以考虑将pin_memory改为False，减少CPU pinned memory占用
+            pin_memory=True,
             persistent_workers=False
         )
 
-        train_sampler.set_epoch(epoch)
-
-        if local_rank == 0:
-            logging.info(f"   => This chunk has {len(chunk_dataset)} samples total, steps in dataloader = {len(train_loader)}.")
+        logging.info(f"   => This chunk has {len(chunk_dataset)} samples total, steps in dataloader = {len(train_loader)}.")
 
         model.train()
 
-        # ============ 在这一批文件上进行训练 =============
+        # 在这一批文件上进行训练
         for batch_data in train_loader:
             s2_aug1 = batch_data['s2_aug1'].to(device, non_blocking=True)
             s2_aug2 = batch_data['s2_aug2'].to(device, non_blocking=True)
@@ -415,7 +351,7 @@ def main():
             batch_sz = s2_aug1.size(0)
             examples += batch_sz
 
-            if (step % config['log_interval_steps'] == 0) and (local_rank == 0):
+            if (step % config['log_interval_steps'] == 0):
                 current_time = time.time()
                 exps = (examples - last_examples) / (current_time - last_time)
                 last_time = current_time
@@ -423,7 +359,7 @@ def main():
                 rolling_loss.append(loss_main.item())
                 if len(rolling_loss) > 40:
                     rolling_loss = rolling_loss[-40:]
-                avg_loss = sum(rolling_loss)/len(rolling_loss)
+                avg_loss = sum(rolling_loss) / len(rolling_loss)
                 current_lr = optimizer.param_groups[0]['lr']
                 try:
                     erank_z = rankme(z1)
@@ -471,7 +407,7 @@ def main():
                 wandb.log(wandb_dict, step=step)
 
             # 验证 + 保存best
-            if (config['val_interval_steps'] > 0) and (step > 0) and (step % config['val_interval_steps'] == 0) and (local_rank == 0):
+            if (config['val_interval_steps'] > 0) and (step > 0) and (step % config['val_interval_steps'] == 0):
                 if all(config.get(k) for k in [
                     'val_s2_bands_file_path', 'val_s2_masks_file_path', 'val_s2_doy_file_path',
                     'val_s1_asc_bands_file_path', 'val_s1_asc_doy_file_path',
@@ -495,9 +431,6 @@ def main():
                     )
                     val_loader = DataLoader(val_dataset, batch_size=512, shuffle=False, num_workers=0)
                     model.eval()
-                    # val_acc = linear_probe_evaluate(model.module, val_loader, device=device)
-                    # wandb.log({"val_acc": val_acc}, step=step)
-                    # logging.info(f"Validation at step {step}: val_acc={val_acc:.4f}")
                     
                     # 调用新的 linear_probe_evaluate 函数计算 acc, f1 和混淆矩阵
                     val_acc, val_f1, val_cm = linear_probe_evaluate(model, val_loader, device=device)
@@ -523,13 +456,12 @@ def main():
                                     color="white" if val_cm[i, j] > thresh else "black")
                     fig.tight_layout()
                     wandb.log({"val_confusion_matrix": wandb.Image(fig)}, step=step)
-                    # close the figure
                     plt.close(fig)
                     
                     global best_val_acc
                     if val_acc > best_val_acc:
                         best_val_acc = val_acc
-                        save_checkpoint(model.module, optimizer, epoch, step, best_val_acc, best_ckpt_path)
+                        save_checkpoint(model, optimizer, epoch, step, best_val_acc, best_ckpt_path)
                     model.train()
 
             step += 1  # 全局step
@@ -537,10 +469,9 @@ def main():
         # 训练完一个chunk，释放资源
         try:
             train_loader._iterator._shutdown_workers()
-        except:
+        except Exception:
             pass
         del train_loader
-        del train_sampler
         del chunk_dataset
         gc.collect()
 
@@ -554,62 +485,53 @@ def main():
     last_time = time.time()
     last_examples = 0
     rolling_loss = []
-    rolling_size = 40
     global best_val_acc
     best_val_acc = 0.0
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_{timestamp}.pt")
+    best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_{timestamp}.pth")
+    
+    # 读取 chunk_batch 配置
+    chunk_batch = config.get('chunk_batch', 40)
+    logging.info(f"chunk_batch = {chunk_batch}")
 
     ############################################################################
-    # ============== 开始多个 EPOCH ==============
+    # 开始多个 EPOCH
     ############################################################################
     for epoch in range(config['epochs']):
-        # rank=0 进程调用rust生成数据（如你需要）
-        # if local_rank == 0:
-        #     aug1_dir = os.path.join(config['data_root'], 'aug1')
-        #     aug2_dir = os.path.join(config['data_root'], 'aug2')
-        #     remove_dir(aug1_dir)
-        #     remove_dir(aug2_dir)
-        #     logging.info(f"Epoch {epoch} started. Generating new training data via rust_cmd...")
-        #     subprocess.run(config['rust_cmd'], shell=True, check=True)
-        #     logging.info(f"Data generation finished for epoch {epoch}.")
+        # 进程调用 rust 生成数据
+        aug1_dir = os.path.join(config['data_root'], 'aug1')
+        aug2_dir = os.path.join(config['data_root'], 'aug2')
+        remove_dir(aug1_dir)
+        remove_dir(aug2_dir)
+        logging.info(f"Epoch {epoch} started. Generating new training data via rust_cmd...")
+        subprocess.run(config['rust_cmd'], shell=True, check=True)
+        logging.info(f"Data generation finished for epoch {epoch}.")
 
-        # 同步，等待数据全部生成
-        dist.barrier()
-
-        # ============ 收集所有文件名(这里假设 file_names 是 S2 的 aug1) ============
+        # 收集所有文件名（这里假设 file_names 是 S2 的 aug1）
         aug1_s2_dir = os.path.join(config['data_root'], 'aug1', 's2')
         s2_file_names = os.listdir(aug1_s2_dir)
         np.random.shuffle(s2_file_names)  # Shuffle file names randomly
         total_files = len(s2_file_names)
-        if local_rank == 0:
-            logging.info(f"Epoch {epoch}: total new files = {total_files} in each folder")
+        logging.info(f"Epoch {epoch}: total new files = {total_files} in each folder")
 
-        # ============ 分块加载训练 ============
+        # 分块加载训练
         chunk_start = 0
         while chunk_start < total_files:
             chunk_end = min(chunk_start + chunk_batch, total_files)
-            # 取出这一批文件名
             chunk_files = s2_file_names[chunk_start:chunk_end]
-            if local_rank == 0:
-                logging.info(f"Epoch {epoch}, chunk [{chunk_start}:{chunk_end}], loading {len(chunk_files)} files...")
+            logging.info(f"Epoch {epoch}, chunk [{chunk_start}:{chunk_end}], loading {len(chunk_files)} files...")
 
-            # 在这个chunk上训练
             step, examples, last_time, last_examples, rolling_loss = _train_one_chunk(
                 chunk_files, epoch, step, examples, last_time, last_examples, rolling_loss
             )
 
-            chunk_start = chunk_end  # 进入下一个 chunk
+            chunk_start = chunk_end
 
-        if local_rank == 0:
-            logging.info(f"Epoch {epoch} finished, current step = {step}")
+        logging.info(f"Epoch {epoch} finished, current step = {step}")
 
     # 训练结束
-    if local_rank == 0:
-        logging.info("Training completed.")
-        wandb_run.finish()
-
-    dist.destroy_process_group()
+    logging.info("Training completed.")
+    wandb_run.finish()
     
 if __name__ == "__main__":
     main()

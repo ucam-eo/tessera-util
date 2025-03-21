@@ -1,15 +1,15 @@
 #!/bin/bash -l
-#SBATCH --job-name=infer     # create a short name for your job
+#SBATCH --job-name=infer-pastis     # create a short name for your job
 #SBATCH --partition=pvc
 #SBATCH --account=climate-dawn-gpu
-#SBATCH --nodes=1                # node count
+#SBATCH --nodes=2                # node count
 #SBATCH --ntasks-per-node=8      # total number of tasks per node
 #SBATCH --cpus-per-task=12        # cpu-cores per task
 #SBATCH --mem=1000G                # total memory per node
 #SBATCH --gres=gpu:4             # number of allocated gpus per node
-#SBATCH --time=5:00:00          # total run time limit (HH:MM:SS)
-#SBATCH --output=log/btfm-infer-%x-%j.out  # set the output file name in which to save stdout and stderr
-#SBATCH --error=log/btfm-infer-%x-%j.err   # set the error file name in which to save compute-node stderr
+#SBATCH --time=6:00:00          # total run time limit (HH:MM:SS)
+#SBATCH --output=log/btfm-infer-pastis-%x-%j.out  # set the output file name in which to save stdout and stderr
+#SBATCH --error=log/btfm-infer-pastis-%x-%j.err   # set the error file name in which to save compute-node stderr
 #SBATCH --exclusive              # exclusive node access
 
 ########################
@@ -17,20 +17,19 @@
 ########################
 module purge
 module load default-dawn
-module load intelpython-conda
-module load oneapi-level-zero
-module load intel-oneapi-ccl
-module load intel-oneapi-compilers
-module load intel-oneapi-dnn
-module load intel-oneapi-dpct
-module load intel-oneapi-dpl
-module load intel-oneapi-inspector
-module load intel-oneapi-mkl
-module load intel-oneapi-mpi
-module load intel-oneapi-tbb
+module load dawn-env/2024-12-29
+module load intel-oneapi-mpi/2021.14.1/oneapi/6qxeyc5c
+module load oneapi-level-zero/1.14/gcc/3tn5pfua
+module load intel-oneapi-compilers/2025.0.4/gcc/umo7dwbo
 
-# conda activate btfm-dawn
-conda activate pytorch-gpu
+# 如果你使用 Anaconda/Miniconda, 激活你的环境:
+source ~/rds/hpc-work/Softwares/anaconda3/bin/activate btfm-my
+# source /usr/local/dawn/software/external/intel-oneapi/2024.0/compiler/latest/env/vars.sh
+# source /usr/local/dawn/software/external/intel-oneapi/2024.0/dnnl/latest/env/vars.sh
+# source /usr/local/dawn/software/external/intel-oneapi/2024.0/mkl/latest/env/vars.sh
+# source /usr/local/dawn/software/external/intel-oneapi/2024.0/ccl/latest/env/vars.sh
+# source /usr/local/dawn/software/external/intel-oneapi/2024.0/tbb/latest/env/vars.sh
+# source /usr/local/dawn/software/external/intel-oneapi/2024.0/mpi/latest/env/vars.sh
 
 echo "==== Step: Python / mpirun version check ===="
 echo "Which python: $(which python)"
@@ -124,7 +123,8 @@ echo "MASTER_PORT=$MASTER_PORT"
 mpiexec -n $WORLD_SIZE -ppn $SLURM_GPUS_ON_NODE -f hostfile_intel_mpi \
     -genv MASTER_ADDR $MASTER_ADDR \
     -genv MASTER_PORT $MASTER_PORT \
-    python src/infer_multi_nodes.py \
-        --config configs/infer_config_robin.py
+    python src/infer_pastis_patch.py \
+       --visualize \
+       --verbose 
 
 echo "==== Step: mpirun done ===="
