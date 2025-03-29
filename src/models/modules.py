@@ -6,30 +6,52 @@ import torch.nn.functional as F
 import math
 import numpy as np
 
+# class AttentionPooling(nn.Module):
+#     def __init__(self, input_dim):
+#         super().__init__()
+#         self.query = nn.Linear(input_dim, 1)
+#     def forward(self, x):
+#         # x: (B, seq_len, dim)
+#         w = torch.softmax(self.query(x), dim=1)  # (B, seq_len, 1)
+#         return (w * x).sum(dim=1)
 class AttentionPooling(nn.Module):
     def __init__(self, input_dim):
         super().__init__()
         self.query = nn.Linear(input_dim, 1)
     def forward(self, x):
-        # x: (B, seq_len, dim)
-        w = torch.softmax(self.query(x), dim=1)  # (B, seq_len, 1)
-        return (w * x).sum(dim=1)
+        # More explicit operations
+        w = torch.softmax(self.query(x), dim=1)
+        weighted = w * x
+        return weighted.sum(dim=1)  # More explicit sum
     
-
-class MultiHeadAttentionPooling(nn.Module):
-    def __init__(self, input_dim, num_heads=16):
+class TemporalAwarePooling(nn.Module):
+    def __init__(self, input_dim):
         super().__init__()
-        self.mha = nn.MultiheadAttention(input_dim, num_heads, batch_first=True)
-        self.query = nn.Parameter(torch.randn(1, 1, input_dim))
+        self.query = nn.Linear(input_dim, 1)
+        self.temporal_context = nn.GRU(input_dim, input_dim, batch_first=True)
         
     def forward(self, x):
-        # x: (B, seq_len, dim)
-        batch_size = x.shape[0]
-        query = self.query.expand(batch_size, -1, -1)
-        
-        # Apply multi-head attention
-        pooled, _ = self.mha(query, x, x)
-        return pooled.squeeze(1)  # (B, dim)
+        # 先通过RNN捕获时序上下文
+        x_context, _ = self.temporal_context(x)
+        # 再计算注意力权重
+        w = torch.softmax(self.query(x_context), dim=1)
+        return (w * x).sum(dim=1)
+
+class TemporalPositionalEncoder(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        self.d_model = d_model
+       
+    def forward(self, doy):
+        # doy: [B, T] tensor containing DOY values (0-365)
+        position = doy.unsqueeze(-1).float()  # Ensure float type
+        div_term = torch.exp(torch.arange(0, self.d_model, 2, dtype=torch.float) * -(math.log(10000.0) / self.d_model))
+        div_term = div_term.to(doy.device)
+       
+        pe = torch.zeros(doy.shape[0], doy.shape[1], self.d_model, device=doy.device)
+        pe[:, :, 0::2] = torch.sin(position * div_term)
+        pe[:, :, 1::2] = torch.cos(position * div_term)
+        return pe
 
 # class TransformerEncoder(nn.Module):
 #     def __init__(self, band_num, latent_dim, nhead=8, num_encoder_layers=4,
@@ -64,43 +86,87 @@ class MultiHeadAttentionPooling(nn.Module):
 #         x = self.fc_out(x)
 #         return x
 
+# class TransformerEncoder(nn.Module):
+#     def __init__(self, band_num, latent_dim, nhead=8, num_encoder_layers=4,
+#                  dim_feedforward=512, dropout=0.1, max_seq_len=20):
+#         super().__init__()
+#         # 将 embedding 维度提升到 latent_dim*4
+#         self.embedding = nn.Sequential(
+#             nn.Linear(band_num, latent_dim * 8),
+#             nn.ReLU(),
+#             nn.Linear(latent_dim * 8, latent_dim * 8)
+#         )
+#         self.pos_encoder = nn.Parameter(torch.randn(1, max_seq_len, latent_dim * 8))
+        
+#         encoder_layer = nn.TransformerEncoderLayer(
+#             d_model=latent_dim * 8,
+#             nhead=nhead,
+#             dim_feedforward=dim_feedforward,
+#             dropout=dropout,
+#             activation="relu",
+#             batch_first=True,
+#         )
+#         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
+        
+#         # self.attn_pool = AttentionPooling(latent_dim * 8)
+#         self.attn_pool = TemporalAwarePooling(latent_dim * 8)
+    
+#     def forward(self, x):
+#         # x: (B, seq_len, band_num)
+#         b, s, _ = x.shape
+#         x = self.embedding(x)  # (B, seq_len, latent_dim*4)
+#         x = x + self.pos_encoder[:, :s, :]
+#         # x = x.permute(1, 0, 2)  # (seq_len, B, latent_dim*4)
+#         x = self.transformer_encoder(x)
+#         # x = x.permute(1, 0, 2)  # (B, seq_len, latent_dim*4)
+#         x = self.attn_pool(x)
+#         # x = self.fc_out(x)
+#         return x
+    
+
 class TransformerEncoder(nn.Module):
     def __init__(self, band_num, latent_dim, nhead=8, num_encoder_layers=4,
-                 dim_feedforward=512, dropout=0.1, max_seq_len=20):
+                dim_feedforward=512, dropout=0.1, max_seq_len=20):
         super().__init__()
-        # 将 embedding 维度提升到 latent_dim*4
-        self.embedding = nn.Sequential(
-            nn.Linear(band_num, latent_dim * 4),
-            nn.ReLU(),
-            nn.Linear(latent_dim * 4, latent_dim * 4)
-        )
-        self.pos_encoder = nn.Parameter(torch.randn(1, max_seq_len, latent_dim * 4))
+        # Total input dimension: bands
+        input_dim = band_num
         
+        # Embedding to increase dimension
+        self.embedding = nn.Sequential(
+            nn.Linear(input_dim, latent_dim * 8),
+            nn.ReLU(),
+            nn.Linear(latent_dim * 8, latent_dim * 8)
+        )
+        
+        # Temporal Encoder for DOY as position encoding
+        self.temporal_encoder = TemporalPositionalEncoder(d_model=latent_dim * 8)
+        
+        # Transformer Encoder Layer
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=latent_dim * 4,
+            d_model=latent_dim * 8,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             activation="relu",
-            batch_first=False
+            batch_first=True,
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-        
-        self.attn_pool = AttentionPooling(latent_dim * 4)
-        # self.attn_pool = MultiHeadAttentionPooling(latent_dim * 4)
-        # 降维到 latent_dim
-        self.fc_out = nn.Linear(latent_dim * 4, latent_dim)
-    
+       
+        # Temporal Aware Pooling
+        self.attn_pool = TemporalAwarePooling(latent_dim * 8)
+   
     def forward(self, x):
-        # x: (B, seq_len, band_num)
-        b, s, _ = x.shape
-        x = self.embedding(x)  # (B, seq_len, latent_dim*4)
-        x = x + self.pos_encoder[:, :s, :]
-        x = x.permute(1, 0, 2)  # (seq_len, B, latent_dim*4)
+        # x: (B, seq_len, 10 bands + 1 doy)
+        # Split bands and doy
+        bands = x[:, :, :-1]  # All columns except last one
+        doy = x[:, :, -1]     # Last column is DOY
+        # Embedding of bands
+        bands_embedded = self.embedding(bands)  # (B, seq_len, latent_dim*8)
+        temporal_encoding = self.temporal_encoder(doy)
+        # Add temporal encoding to embedded bands (instead of random positional encoding)
+        x = bands_embedded + temporal_encoding
         x = self.transformer_encoder(x)
-        x = x.permute(1, 0, 2)  # (B, seq_len, latent_dim*4)
         x = self.attn_pool(x)
-        # x = self.fc_out(x)
         return x
 
 
@@ -111,7 +177,16 @@ class ProjectionHead(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(inplace=False),
-            nn.Linear(hidden_dim, output_dim)
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(inplace=False),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(inplace=False),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(inplace=False),
+            nn.Linear(hidden_dim, output_dim),
         )
     def forward(self, x):
         return self.net(x)

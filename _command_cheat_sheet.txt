@@ -1,22 +1,10 @@
-# to aply for an interactive node on GPU
-salloc --nodes=1 --ntasks-per-node=1 -p pvc --gres=gpu:1 -A CLIMATE-DAWN-GPU --cpus-per-task=24 --mem=128G -t 36:00:00
-
-salloc --nodes=1 --ntasks-per-node=8 -p pvc --gres=gpu:4 -A CLIMATE-DAWN-GPU --cpus-per-task=12 --mem=1000G -t 36:00:00
-
-salloc --nodes=2 --ntasks-per-node=8 -p pvc --gres=gpu:4 -A CLIMATE-DAWN-GPU --cpus-per-task=12 --mem=1000G -t 36:00:00
-
-salloc --nodes=1 -p icelake -A KESHAV-SL3-CPU --cpus-per-task=48 --mem=150G -t 6:00:00
-
-salloc --nodes=1 -p cclake -A KESHAV-SL3-CPU --cpus-per-task=32 --mem=100G -t 6:00:00
-
-salloc --nodes=1 -p cclake-himem -A KESHAV-SL3-CPU --cpus-per-task=32 --mem=280G -t 6:00:00
-
-salloc --nodes=1 -p sapphire -A KESHAV-SL3-CPU --cpus-per-task=20 --mem=300G -t 6:00:00
-
-sintr -t 07:00:00 -A CLIMATE-DAWN-GPU -p pvc -n 1 -c 54 --gres=gpu:4 --mem=512G
-
-sintr -t 06:00:00 -N1 -n38 -A KESHAV-SL3-CPU -p icelake
-
-rsync -av --ignore-existing zf281@kinabalu.cl.cam.ac.uk:/maps/zf281/btfm-data-preparation/s2_s1_global_project/data_processed/ /home/zf281/rds/hpc-work/Files/btfm/data/global/
-
-rsync -avzP zf281@daintree.cl.cam.ac.uk:/scratch/zf281/robin/fungal/data_processed/34VFJ .
+docker run -it \
+  --cap-add=SYS_PTRACE \
+  --security-opt seccomp=unconfined \
+  --device=/dev/kfd \
+  --device=/dev/dri \
+  --group-add video \
+  --ipc=host \
+  --shm-size 1.5T \
+  -v /media/12TBNVME/frankfeng/btfm4rs:/workspace \
+  my-rocm:latest

@@ -176,10 +176,14 @@ class AustrianCropValidation(Dataset):
         if self.standardize:
             sub_bands = (sub_bands - self.s2_band_mean) / (self.s2_band_std + 1e-9)
 
-        doys_norm = sub_doys / 365.
-        sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
-        cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
-        arr = np.hstack([sub_bands, sin_doy, cos_doy])
+        # doys_norm = sub_doys / 365.
+        # sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
+        # cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
+        # arr = np.hstack([sub_bands, sin_doy, cos_doy])
+        # return torch.tensor(arr, dtype=torch.float32)
+        
+        # 直接把sub_doys连接到sub_bands后面
+        arr = np.hstack([sub_bands, sub_doys.reshape(-1, 1)])
         return torch.tensor(arr, dtype=torch.float32)
 
     def _augment_s1(self, asc_bands_ij, asc_doys, desc_bands_ij, desc_doys):
@@ -208,10 +212,14 @@ class AustrianCropValidation(Dataset):
         if self.standardize:
             sub_bands = (sub_bands - self.s1_band_mean) / (self.s1_band_std + 1e-9)
 
-        doys_norm = sub_d / 365.
-        sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
-        cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
-        arr = np.hstack([sub_bands, sin_doy, cos_doy])
+        # doys_norm = sub_d / 365.
+        # sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
+        # cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
+        # arr = np.hstack([sub_bands, sin_doy, cos_doy])
+        # return torch.tensor(arr, dtype=torch.float32)
+        
+        # 直接把sub_doys连接到sub_bands后面
+        arr = np.hstack([sub_bands, sub_d.reshape(-1, 1)])
         return torch.tensor(arr, dtype=torch.float32)
 
     def __getitem__(self, idx):

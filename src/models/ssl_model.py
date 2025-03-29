@@ -44,7 +44,7 @@ def compute_cross_correlation(z1, z2):
     return c
 
 class MultimodalBTModel(nn.Module):
-    def __init__(self, s2_backbone, s1_backbone, projector, fusion_method='sum', return_repr=False, latent_dim=None):
+    def __init__(self, s2_backbone, s1_backbone, projector, fusion_method='concat', return_repr=False, latent_dim=128):
         """
         fusion_method: 'sum', 'concat' 或 'transformer'
         若使用'transformer'则需要提供latent_dim
@@ -55,28 +55,16 @@ class MultimodalBTModel(nn.Module):
         self.projector = projector
         self.fusion_method = fusion_method
         self.return_repr = return_repr
-        if self.fusion_method == 'transformer':
-            if latent_dim is None:
-                raise ValueError("latent_dim must be provided for transformer fusion")
-            self.fusion_transformer = FusionTransformer(input_dim=latent_dim, num_layers=1, nhead=4)
         
-        #added
-        # if fusion_method == 'concat':
-        #     self.dim_reducer = nn.Sequential(
-        #         nn.Linear(1024, 128)
-        #     )
-        # elif fusion_method == 'sum':
-        #     self.dim_reducer = nn.Sequential(
-        #         nn.Linear(512, 128)
-        #     )
+        if fusion_method == 'concat':
+            in_dim = 16 * latent_dim  
+        elif fusion_method == 'sum':
+            in_dim = 4 * latent_dim
+
+        self.dim_reducer = nn.Sequential(nn.Linear(in_dim, latent_dim))
         
-        self.dim_reducer = nn.Sequential(
-            nn.Linear(1024, 128)
-        )
         # self.dim_reducer = nn.Sequential(
-        #     nn.Linear(1024, 512),
-        #     nn.ReLU(),
-        #     nn.Linear(512, 128)
+        #     nn.Linear(1024, 128)
         # )
 
     def forward(self, s2_x, s1_x):
@@ -86,9 +74,6 @@ class MultimodalBTModel(nn.Module):
             fused = torch.cat([s2_repr, s1_repr], dim=-1)
         elif self.fusion_method == 'sum':
             fused = s2_repr + s1_repr
-        elif self.fusion_method == 'transformer':
-            tokens = torch.stack([s2_repr, s1_repr], dim=1)
-            fused = self.fusion_transformer(tokens)
         else:
             raise ValueError(f"Unknown fusion method: {self.fusion_method}")
         # 降维到128

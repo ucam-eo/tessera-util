@@ -52,8 +52,88 @@
 
 import numpy as np
 
-file_path = "/home/zf281/rds/rds-sj514-data-WBrUDmBgqOo/s2_s1_global_project/pastis/pastis_patch_d-pixel/10000/bands.npy"
+file_path = "data/ssl_training/ready_to_use_temp/aug1/s2/data_B1_F1.npy"
 data = np.load(file_path, mmap_mode='r')
 print(data.shape)
-print(data)
-# print(data[20, 100:110, 100:110, 1])  # 0.0
+# print(data)
+# 随机生成0-1000000之间的20个整数
+# indices = np.random.randint(0, 1000000, 20)
+# print(data[indices, :, :])  # 0.0
+
+
+
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# file_path = "/media/12TBNVME/frankfeng/btfm4rs/data/ssl_training/austrian_crop/sar_descending_downsample_100.npy"
+# data = np.load(file_path, mmap_mode='r')
+# print(f"Number of non-zero elements: {np.count_nonzero(data)}")
+# # 遍历时间维度，找出不为0的元素最多的时间步
+# nonzero_count = np.count_nonzero(data, axis=(1,2,3))
+# max_idx = np.argmax(nonzero_count)
+# print(f"valid time step:", max_idx)
+# # 用memmap
+# # data = np.memmap(file_path, dtype='int16', mode='r', shape=(142, 10980, 10980, 10))
+# sar_time_step = max_idx
+
+# print(data.shape)  # 输出数组的形状
+# print(data.dtype)  # 输出数组的数据类型
+# print(data[sar_time_step,0:10,0:10,:])
+
+# single_image = data[sar_time_step, :, :, 0]  # 获取第一个时间步的第一个波段
+# plt.imshow(single_image, cmap='gray')
+# plt.savefig('sar_0.png')
+# plt.close()
+
+# single_image = data[sar_time_step, :, :, 1]  # 获取第一个时间步的第一个波段
+# plt.imshow(single_image, cmap='gray')
+# plt.savefig('sar_1.png')
+# plt.close()
+
+# band_file_path = "/media/12TBNVME/frankfeng/btfm4rs/data/ssl_training/austrian_crop/bands_downsample_100.npy"
+# band_data = np.load(band_file_path, mmap_mode='r')
+# print(band_data.shape)  # 输出数组的形状
+
+# mask_file_path = "/media/12TBNVME/frankfeng/btfm4rs/data/ssl_training/austrian_crop/masks_downsample_100.npy"
+# mask_data = np.load(mask_file_path) # (T,H,W)
+# # 找出含有最多1的时间步
+# mask_sum = np.sum(mask_data, axis=(1,2))
+# max_idx = np.argmax(mask_sum)
+# print("valid time step:", max_idx)
+
+# rgb_time_step = max_idx
+
+# single_rbg_image = band_data[rgb_time_step, :, :, :3]  # 获取第一个时间步的RGB波段
+# # 转为float
+# single_rbg_image = single_rbg_image.astype(np.float32)
+# # 转为rgb
+# single_rbg_image = single_rbg_image[:, :, [2, 1, 0]]
+# # 归一化
+# for i in range(3):
+#     single_rbg_image[:, :, i] = (single_rbg_image[:, :, i] - np.min(single_rbg_image[:, :, i])) / (np.max(single_rbg_image[:, :, i]) - np.min(single_rbg_image[:, :, i]))
+
+# import cv2
+
+# def histogram_equalization(image):
+#     for i in range(3):
+#         image[:,:,i] = cv2.equalizeHist((image[:,:,i] * 255).astype(np.uint8)) / 255.0
+#     return image
+
+# single_rbg_image = histogram_equalization(single_rbg_image)    
+
+# plt.imshow(single_rbg_image)
+# plt.savefig('rgb.png')
+# plt.close()
+
+# doy_file_path = "/scratch/zf281/data_processed/37NFG/doys.npy"
+# doy_data = np.load(doy_file_path, mmap_mode='r')
+# print(doy_data.shape)  # 输出数组的形状
+
+# sar_doy_file_path = "/scratch/zf281/data_processed/37NFG/sar_ascending_doy.npy"
+# sar_doy_data = np.load(sar_doy_file_path, mmap_mode='r')
+# print(sar_doy_data.shape)  # 输出数组的形状
+
+# mask_file_path = "/scratch/zf281/data_processed/37NFG/masks.npy"
+# mask_data = np.load(mask_file_path, mmap_mode='r')
+# print(mask_data.shape)  # 输出数组的形状
+# print(mask_data[0, 100:120, 100:120])

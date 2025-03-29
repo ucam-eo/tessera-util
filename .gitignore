@@ -8,3 +8,4 @@ log/
 *.sif
 *.out
 *.err
+training-data-preprocessing/target/
