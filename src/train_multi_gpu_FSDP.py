@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 
 # 运行方式:
-#   torchrun --nproc_per_node=8 --nnodes=X --node_rank=Y --master_addr=MASTER_IP --master_port=29500 src/train_fsdp.py
+#   torchrun --nproc_per_node=8 --master_addr=127.0.0.1 --master_port=29500 src/train_multi_gpu_FSDP.py
 
 import os
 os.environ["PYTORCH_SDP_DISABLE_FLASH_ATTENTION"] = "1"
 os.environ["PYTORCH_SDP_DISABLE_MEM_EFFICIENT_ATTENTION"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
+from datetime import timedelta
 import math
 import time
 import gc
@@ -56,7 +57,7 @@ import matplotlib.pyplot as plt
 from models.modules import TransformerEncoder, ProjectionHead, SpectralTemporalTransformer
 from models.ssl_model import MultimodalBTModel, BarlowTwinsLoss, compute_cross_correlation
 from utils.lr_scheduler import adjust_learning_rate, LARS
-from utils.metrics import linear_probe_evaluate, rankme, rf_probe_evaluate
+from utils.metrics import linear_probe_evaluate, rankme
 from utils.misc import remove_dir, save_checkpoint, plot_cross_corr
 
 import torch.nn.attention as attn
@@ -177,7 +178,8 @@ def main():
     ########################################################################
     # 0) 初始化分布式环境 (使用 PyTorch 内置的 torchrun + FSDP)
     ########################################################################
-    dist.init_process_group(backend='nccl')  # 在 AMD ROCm 上通常也使用 NCCL (其实底层是 RCCL)
+    # dist.init_process_group(backend='nccl')  # 在 AMD ROCm 上通常也使用 NCCL (其实底层是 RCCL)
+    dist.init_process_group(backend='nccl', timeout=timedelta(minutes=60))  # Set to 60 minutes or adjust as needed
 
     global_rank = dist.get_rank()
     world_size = dist.get_world_size()
@@ -237,6 +239,20 @@ def main():
     run_name = f"FSDP_BT_Iter_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     if local_rank == 0:
         wandb_run = wandb.init(project="btfm-iterable", name=run_name, config=config)
+        # wandb_run = wandb.init(project="btfm-iterable-temp", name=run_name, config=config)
+        
+        # 存入源代码
+        artifact = wandb.Artifact('source-code', type='code')
+        artifact.add_file('src/train_multi_gpu_FSDP.py')
+        artifact.add_file('src/datasets/ssl_dataset.py')
+        artifact.add_file('src/models/modules.py')
+        artifact.add_file('src/models/ssl_model.py')
+        artifact.add_file('src/utils/lr_scheduler.py')
+        artifact.add_file('src/utils/metrics.py')
+        artifact.add_file('src/utils/misc.py')
+        artifact.add_file('configs/ssl_config.py')
+        wandb.log_artifact(artifact)
+        
     else:
         wandb_run = None
 
@@ -364,6 +380,13 @@ def main():
         logging.info("FSDP Configuration:")
         config_str = json.dumps({k: str(v) for k, v in fsdp_config.items()}, indent=2)
         logging.info(config_str)
+        
+    # 加载验证集的field ID数据（如果配置中提供了路径）
+    field_ids = None
+    if 'field_id_path' in config and os.path.exists(config['field_id_path']):
+        logging.info(f"Loading field IDs from {config['field_id_path']}")
+        field_ids = np.load(config['field_id_path'])
+        logging.info(f"Field IDs loaded, shape: {field_ids.shape}")
 
     # 使用 FSDP 包装模型
     with (attn.sdpa_kernel(attn.SDPBackend.MATH) if config.get('use_torch_compile', False) else nullcontext()):
@@ -391,8 +414,8 @@ def main():
             logging.info(f"Ideal sharding ratio: {ideal_ratio:.4f}")
         
         if config.get('use_torch_compile', False):
-            # model = torch.compile(model, mode="default")
-            model = torch.compile(model, mode="max-autotune")
+            model = torch.compile(model, mode="default", dynamic=True)
+            # model = torch.compile(model, mode="max-autotune", dynamic=True)
             if local_rank == 0:
                 logging.info("Using torch.compile to optimize the model...")
 
@@ -452,14 +475,25 @@ def main():
                 lr=config['learning_rate'], 
                 weight_decay=1e-6
             )
+            # optimizer = LARS(model.parameters(), lr=0, weight_decay=1e-6,
+            #         weight_decay_filter=True,
+            #         lars_adaptation_filter=True)
         else:
             # 创建具有两个参数组的优化器
             optimizer = torch.optim.AdamW(
                 [{'params': weight_params}, {'params': bias_params}],
                 lr=config['learning_rate'], 
-                weight_decay=1e-6
-            )
+                weight_decay=1e-6)
+            # optimizer = LARS([{'params': weight_params}, {'params': bias_params}], lr=0, weight_decay=1e-6,
+            #     weight_decay_filter=True,
+            #     lars_adaptation_filter=True)
 
+        # 打印weight_params和bias_params的数量
+        if local_rank == 0:
+            logging.info("After building optimizer:")
+            logging.info(f"Weight parameters: {len(weight_params)}")
+            logging.info(f"Bias parameters: {len(bias_params)}")
+        
         # 使用新的 GradScaler 写法（如果需要 AMP）
         scaler = torch.amp.GradScaler("cuda") if apply_amp else None
         
@@ -663,14 +697,14 @@ def main():
                         logging.warning("Rank computation failed.")
                     
                     # 记录当前GPU内存使用情况
-                    current_gpu_mem = get_gpu_memory_usage()
+                    # current_gpu_mem = get_gpu_memory_usage()
 
                     logging.info(
                         f"[Epoch={epoch}, Step={step}] "
                         f"Loss={loss_main.item():.2f}, MixLoss={loss_mix:.2f}, AvgLoss={avg_loss:.2f}, "
                         f"LR={current_lr:.4f}, batchsize={batch_sz}, Examples/sec={exps:.2f}, "
                         f"Rank(z)={erank_z:.4f}, Rank(repr)={erank_repr:.4f}, "
-                        f"GPU_Mem={current_gpu_mem:.2f}MB"
+                        # f"GPU_Mem={current_gpu_mem:.2f}MB"
                     )
 
                     wandb_dict = {
@@ -683,7 +717,7 @@ def main():
                         "total_loss": total_loss.item(),
                         "rank_z": erank_z,
                         "rank_repr": erank_repr,
-                        "gpu_memory_usage_mb": current_gpu_mem
+                        # "gpu_memory_usage_mb": current_gpu_mem
                     }
                     
                     progress_percentage = (step / total_steps) * 100
@@ -700,8 +734,8 @@ def main():
                     wandb.log(wandb_dict, step=step)
 
                 # 验证 + 保存best
-                if (config['val_interval_steps'] > 0) and (step > 0) and \
-                (step % config['val_interval_steps'] == 0) and (local_rank == 0):
+                if (config['val_interval_steps'] > 0) and (step > 0) and (step % config['val_interval_steps'] == 0) and (local_rank == 0):
+                # if (config['val_interval_steps'] > 0) and (step % config['val_interval_steps'] == 0) and (local_rank == 0):
                     if all(config.get(k) for k in [
                         'val_s2_bands_file_path',
                         'val_s2_masks_file_path',
@@ -722,6 +756,7 @@ def main():
                             s1_desc_bands_file_path=config['val_s1_desc_bands_file_path'],
                             s1_desc_doy_file_path=config['val_s1_desc_doy_file_path'],
                             labels_path=config['val_labels_path'],
+                            field_id_path=config.get('field_id_path'),  # 可能为None
                             sample_size_s2=config['sample_size_s2'],
                             sample_size_s1=config['sample_size_s1'],
                             min_valid_timesteps=0,
@@ -731,11 +766,21 @@ def main():
 
                         model.eval()
                         # 线性探针：返回 accuracy, F1, 以及混淆矩阵
-                        val_acc, val_f1, val_cm, val_report = linear_probe_evaluate(model, val_loader, device=device)
+                        val_acc, val_f1, val_cm, val_cr = linear_probe_evaluate(
+                            model, 
+                            val_loader, 
+                            field_ids=field_ids,
+                            field_data_path=config.get('fielddata_csv_path'),
+                            training_ratio=config.get('training_ratio', 0.3),
+                            val_test_split_ratio=config.get('val_test_split_ratio', 1/7.0),
+                            classifier_type=config.get('classifier_type', 'lr'),
+                            num_inference=config.get('num_inference', 1),
+                            device=device
+                        )
                         wandb.log({"val_acc": val_acc, "val_f1": val_f1}, step=step)
                         logging.info(f"Validation at step {step}: val_acc={val_acc:.4f}, F1 Score={val_f1:.4f}")
-                        wandb.log({"classification_report_linear": wandb.Html("<pre>" + val_report + "</pre>")}, step=step)
-                        logging.info(f"Classification Report:\n{val_report}")
+                        wandb.log({"classification_report_linear": wandb.Html("<pre>" + val_cr + "</pre>")}, step=step)
+                        logging.info(f"Classification Report:\n{val_cr}")
                         
                         # 绘制混淆矩阵
                         fig, ax = plt.subplots(figsize=(8, 6))
@@ -886,6 +931,8 @@ def main():
 # 添加单组学习率调度函数
 def adjust_single_group_lr(iter_count, total_iters, learning_rate, warmup_ratio=0.1, plateau_ratio=0.7):
     """为单一参数组调整学习率"""
+    # # 先把学习率乘以0.2
+    # learning_rate *= 0.2
     warmup_iters = int(total_iters * warmup_ratio)
     plateau_iters = int(total_iters * plateau_ratio)
     

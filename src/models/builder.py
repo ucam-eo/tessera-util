@@ -4,22 +4,22 @@ from .ssl_model import MultimodalBTModel
 def build_ssl_model(config, device):
     # 注意：增强后 S2 数据通道数固定为 12（10 个原始波段 + 2 个 doy 特征），S1 数据通道数为 4（2+2）
     s2_backbone_ssl = TransformerEncoder(
-        band_num=12,
+        band_num=10,
         latent_dim=config['latent_dim'],
         nhead=8,
-        num_encoder_layers=16,
-        dim_feedforward=512,
+        num_encoder_layers=8,
+        dim_feedforward=4096,
         dropout=0.1,
-        max_seq_len=20
+        max_seq_len=40
     )
     s1_backbone_ssl = TransformerEncoder(
-        band_num=4,
+        band_num=2,
         latent_dim=config['latent_dim'],
         nhead=8,
-        num_encoder_layers=16,
-        dim_feedforward=512,
+        num_encoder_layers=8,
+        dim_feedforward=4096,
         dropout=0.1,
-        max_seq_len=20
+        max_seq_len=40
     )
     if config["fusion_method"] == "concat":
         # input_dim_for_projector = config['latent_dim'] * 2

@@ -1,0 +1,27 @@
+[package]
+name = "training-data-preprocessing-single-doy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 命令行解析
+clap = { version = "4.2", features = ["derive"] }
+
+# 日志、进度条
+log = "0.4"
+env_logger = "0.9"
+indicatif = "0.17"
+
+# 数组与npy IO，开启 rayon 特性以支持并行操作
+ndarray = { version = "0.15", features = ["rayon"] }
+ndarray-npy = "0.8"
+
+# 并行
+rayon = "1.7"
+
+# 错误处理
+anyhow = "1.0"
+
+# 随机
+rand = { version = "0.8", features = ["small_rng"] }
+rand_distr = "0.4"

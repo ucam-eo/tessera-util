@@ -59,7 +59,9 @@ def adjust_learning_rate(optimizer, step, total_steps, base_lr, warmup_ratio, pl
         lr = base_lr
     else:
         progress = (step - plateau_steps) / (total_steps - plateau_steps)
-        lr = base_lr * 0.5 * (1.0 + math.cos(math.pi * progress))
-    # 假设optimizer有两个param group
+        # 余弦退火的最低学习率为 base_lr/100
+        min_lr_ratio = 0.01
+        lr = base_lr * ((1 - min_lr_ratio) * 0.5 * (1.0 + math.cos(math.pi * progress)) + min_lr_ratio)
+    # optimizer有两个param group
     optimizer.param_groups[0]['lr'] = lr * 0.2
     optimizer.param_groups[1]['lr'] = lr * 0.0048
