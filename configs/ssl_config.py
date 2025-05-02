@@ -12,11 +12,11 @@ config = {
     "fusion_method": "concat",  # 可选 'sum', 'concat', 'transformer'
     "latent_dim": 128,
 
-    "s2_num_heads": 8,
-    "s2_num_layers": 8,
+    "s2_num_heads": 16,
+    "s2_num_layers": 16,
     "s2_dim_feedforward": 4096,
-    "s1_num_heads": 8,
-    "s1_num_layers": 8,
+    "s1_num_heads": 16,
+    "s1_num_layers": 16,
     "s1_dim_feedforward": 4096,
 
     # 投影头维度
@@ -28,7 +28,7 @@ config = {
     "num_workers": 2,
     "shuffle_tiles": True,
     "log_interval_steps": 10,
-    "val_interval_steps": 600,
+    "val_interval_steps": 1200,
     "eval_method": "linear_probe",
     "val_s2_bands_file_path": "data/ssl_training/austrian_crop/bands_downsample_100.npy",
     "val_s2_masks_file_path": "data/ssl_training/austrian_crop/masks_downsample_100.npy",
@@ -77,8 +77,8 @@ config = {
     "apply_mixup": True,
 
     # 是否使用AMP
-    # "apply_amp": True,
-    "apply_amp": False,
+    "apply_amp": True,
+    # "apply_amp": False,
 
     # 是否使用torch.compile
     "use_torch_compile": True,

@@ -19,6 +19,9 @@ import subprocess
 from datetime import datetime
 from contextlib import nullcontext
 import json
+import copy
+import threading
+import signal
 
 import numpy as np
 import torch
@@ -96,6 +99,62 @@ def print_model_info(model, name="Model"):
         f"Model Structure:\n{model_structure}"
     )
 
+# 创建评估模型的辅助函数
+def create_evaluation_model(config, device):
+    """
+    创建一个与训练模型结构相同但未共享权重的模型，用于评估。
+    """
+    # 读取配置
+    s2_num_heads = config['s2_num_heads']
+    s2_num_layers = config['s2_num_layers']
+    s2_dim_feedforward = config['s2_dim_feedforward']
+    s1_num_heads = config['s1_num_heads']
+    s1_num_layers = config['s1_num_layers']
+    s1_dim_feedforward = config['s1_dim_feedforward']
+    
+    # 确定投影头的输入维度
+    if config['fusion_method'] == 'concat':
+        proj_in_dim = config['latent_dim']
+    else:
+        proj_in_dim = config['latent_dim']
+    
+    # 创建模型组件
+    s2_enc = TransformerEncoder(
+        band_num=10,
+        latent_dim=config['latent_dim'],
+        nhead=s2_num_heads,
+        num_encoder_layers=s2_num_layers,
+        dim_feedforward=s2_dim_feedforward,
+        dropout=0.1,
+        max_seq_len=config['sample_size_s2'],
+    ).to(device)
+
+    s1_enc = TransformerEncoder(
+        band_num=2,
+        latent_dim=config['latent_dim'],
+        nhead=s1_num_heads,
+        num_encoder_layers=s1_num_layers,
+        dim_feedforward=s1_dim_feedforward,
+        dropout=0.1,
+        max_seq_len=config['sample_size_s1'],
+    ).to(device)
+
+    projector = ProjectionHead(
+        proj_in_dim,
+        config['projector_hidden_dim'],
+        config['projector_out_dim']
+    ).to(device)
+
+    # 将模型组件组合成完整模型
+    eval_model = MultimodalBTModel(
+        s2_enc, s1_enc, projector,
+        fusion_method=config['fusion_method'],
+        return_repr=True,
+        latent_dim=config['latent_dim']
+    ).to(device)
+    
+    return eval_model
+
 ##########################################################################
 # 1) 一个用于加载"部分文件"的Dataset类
 ##########################################################################
@@ -169,6 +228,141 @@ def parse_args():
     parser.add_argument('--config', type=str, default="configs/ssl_config.py",
                         help="Path to config file (e.g. configs/ssl_config.py)")
     return parser.parse_args()
+
+# 添加单组学习率调度函数
+def adjust_single_group_lr(iter_count, total_iters, learning_rate, warmup_ratio=0.1, plateau_ratio=0.7):
+    """为单一参数组调整学习率"""
+    # # 先把学习率乘以0.2
+    # learning_rate *= 0.2
+    warmup_iters = int(total_iters * warmup_ratio)
+    plateau_iters = int(total_iters * plateau_ratio)
+    
+    if iter_count < warmup_iters:
+        # 预热阶段，线性增加学习率
+        return learning_rate * (iter_count / warmup_iters)
+    elif iter_count < plateau_iters:
+        # 稳定学习率阶段
+        return learning_rate
+    else:
+        # 余弦衰减阶段
+        decay_ratio = (iter_count - plateau_iters) / (total_iters - plateau_iters)
+        cosine_decay = 0.5 * (1 + math.cos(math.pi * decay_ratio))
+        return learning_rate * cosine_decay
+
+# 保存FSDP模型
+def save_fsdp_model(model, optimizer, config, filename, step, epoch, local_rank, is_final=False):
+    """
+    保存FSDP模型的完整状态到磁盘
+    
+    Args:
+        model: FSDP模型
+        optimizer: 优化器
+        config: 配置字典
+        filename: 保存文件路径
+        step: 当前训练步数
+        epoch: 当前训练周期
+        local_rank: 当前进程的本地排名
+        is_final: 是否为最终模型保存
+    """
+    start_time = time.time()
+    
+    # 创建checkpoints目录
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    
+    # 为模型参数和优化器状态配置FSDP保存选项
+    full_model_state_config = FullStateDictConfig(
+        offload_to_cpu=True,
+        rank0_only=True
+    )
+    
+    optim_state_config = FullOptimStateDictConfig(
+        offload_to_cpu=True,
+        rank0_only=True
+    )
+    
+    # 设置barrier同步所有进程
+    dist.barrier()
+    
+    # 使用FSDP API提取完整状态字典
+    with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, full_model_state_config):
+        model_state = model.state_dict()
+        
+        # 优化器状态 (可选)
+        if is_final:  # 只在最终保存时保存优化器状态
+            with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, optim_state_config):
+                optim_state = optimizer.state_dict()
+        else:
+            optim_state = None
+        
+        # 只在rank=0上保存
+        if local_rank == 0:
+            # 准备保存的数据
+            checkpoint = {
+                'epoch': epoch,
+                'step': step,
+                'model_state_dict': model_state,
+                'config': config,
+            }
+            
+            if optim_state is not None:
+                checkpoint['optimizer_state_dict'] = optim_state
+            
+            # 先保存到临时文件，然后重命名，防止意外中断导致文件损坏
+            temp_filename = f"{filename}.temp"
+            torch.save(checkpoint, temp_filename)
+            os.replace(temp_filename, filename)
+            
+            logging.info(f"Model saved to {filename} (took {time.time() - start_time:.2f}s)")
+    
+    # 设置barrier等待保存完成
+    dist.barrier()
+    
+    return model_state if local_rank == 0 else None
+
+# 从检查点加载评估模型
+def load_model_from_checkpoint(checkpoint_path, config, device):
+    """
+    从保存的检查点加载模型用于评估
+    
+    Args:
+        checkpoint_path: 检查点文件路径
+        config: 配置字典
+        device: 计算设备
+        
+    Returns:
+        loaded_model: 加载了权重的模型
+    """
+    logging.info(f"Loading model from checkpoint: {checkpoint_path}")
+    
+    # 创建一个新的评估模型
+    eval_model = create_evaluation_model(config, device)
+    
+    # 加载检查点
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model_state_dict = checkpoint['model_state_dict']
+    
+    # 清理状态字典中的FSDP特定前缀
+    cleaned_state_dict = {}
+    for key, value in model_state_dict.items():
+        # 移除常见的FSDP前缀
+        clean_key = key
+        if '_fsdp_wrapped_module.' in key:
+            clean_key = key.replace('_fsdp_wrapped_module.', '')
+        if 'module.' in clean_key:
+            clean_key = clean_key.replace('module.', '')
+            
+        cleaned_state_dict[clean_key] = value
+    
+    # 加载状态字典
+    eval_model.load_state_dict(cleaned_state_dict, strict=False)
+    
+    # 验证模型是否正确加载
+    logging.info(f"Model loaded with {len(model_state_dict)} parameters")
+    
+    # 设置为评估模式
+    eval_model.eval()
+    
+    return eval_model
 
 def main():
     # 设置初始化种子
@@ -333,20 +527,17 @@ def main():
     # 设置损失函数
     criterion = BarlowTwinsLoss(lambda_coeff=config['barlow_lambda'])
 
-    # 定义自动包装策略 - 这将确定哪些层应该自动被FSDP包装
-    # 获取 transformer 层类型（你需要根据你的模型结构调整这些）
+    # 定义自动包装策略
     module_classes_to_wrap = []
-    # 如果 TransformerEncoder 中有子层如 TransformerEncoderLayer，可以添加它们
-    # 我们不确定你的 TransformerEncoder 的内部结构，所以默认包装整个 TransformerEncoder
     module_classes_to_wrap.append(TransformerEncoder)
 
     # 定义 FSDP 混合精度配置 (如果使用 AMP)
     if apply_amp:
         mixed_precision_policy = MixedPrecision(
             param_dtype=torch.float16,
-            # 保持主要计算在 float16, 但累加在 float32 避免数值问题
+            # Use float32 for matrix multiplications and reductions
             reduce_dtype=torch.float32,
-            buffer_dtype=torch.float16,
+            buffer_dtype=torch.float32,
         )
     else:
         mixed_precision_policy = None
@@ -495,7 +686,13 @@ def main():
             logging.info(f"Bias parameters: {len(bias_params)}")
         
         # 使用新的 GradScaler 写法（如果需要 AMP）
-        scaler = torch.amp.GradScaler("cuda") if apply_amp else None
+        # scaler = torch.amp.GradScaler("cuda") if apply_amp else None
+        scaler = torch.amp.GradScaler(
+            init_scale=2**10,  # Start with a much lower scale (default is 2^16)
+            growth_factor=1.5,  # Grow scale more slowly (default is 2.0)
+            backoff_factor=0.5,  # Reduce more aggressively on NaNs
+            growth_interval=100  # Update less frequently
+        ) if apply_amp else None
         
         if local_rank == 0 and wandb_run is not None:
             # 注意：FSDP 下 wandb.watch 可能不会记录所有梯度和参数
@@ -596,6 +793,7 @@ def main():
 
                         # 如果需要 mixup
                         loss_mix = 0.0
+                        # Inside your training loop
                         if config.get('apply_mixup', False):
                             B = s2_aug1.size(0)
                             idxs = torch.randperm(B, device=device)
@@ -603,9 +801,18 @@ def main():
                                 config['beta_alpha'],
                                 config['beta_beta']
                             ).sample().to(device)
-                            y_m_s2 = alpha * s2_aug1 + (1 - alpha) * s2_aug2[idxs, :]
-                            y_m_s1 = alpha * s1_aug1 + (1 - alpha) * s1_aug2[idxs, :]
+                            
+                            # Convert to float32 for mixup
+                            s2_aug1_fp32 = s2_aug1.to(torch.float32)
+                            s2_aug2_fp32 = s2_aug2.to(torch.float32) 
+                            s1_aug1_fp32 = s1_aug1.to(torch.float32)
+                            s1_aug2_fp32 = s1_aug2.to(torch.float32)
+                            
+                            # Do mixup in fp32
+                            y_m_s2 = (alpha * s2_aug1_fp32 + (1 - alpha) * s2_aug2_fp32[idxs, :]).to(s2_aug1.dtype)
+                            y_m_s1 = (alpha * s1_aug1_fp32 + (1 - alpha) * s1_aug2_fp32[idxs, :]).to(s1_aug1.dtype)
 
+                            # Do mixup forward pass with higher precision
                             z_m, _ = model(y_m_s2, y_m_s1)
 
                             # 通过 gather 替换高级索引 z2[idxs]
@@ -733,101 +940,141 @@ def main():
 
                     wandb.log(wandb_dict, step=step)
 
-                # 验证 + 保存best
-                if (config['val_interval_steps'] > 0) and (step > 0) and (step % config['val_interval_steps'] == 0) and (local_rank == 0):
-                # if (config['val_interval_steps'] > 0) and (step % config['val_interval_steps'] == 0) and (local_rank == 0):
-                    if all(config.get(k) for k in [
-                        'val_s2_bands_file_path',
-                        'val_s2_masks_file_path',
-                        'val_s2_doy_file_path',
-                        'val_s1_asc_bands_file_path',
-                        'val_s1_asc_doy_file_path',
-                        'val_s1_desc_bands_file_path',
-                        'val_s1_desc_doy_file_path',
-                        'val_labels_path'
-                    ]):
-                        from datasets.ssl_dataset import AustrianCropValidation
-                        val_dataset = AustrianCropValidation(
-                            s2_bands_file_path=config['val_s2_bands_file_path'],
-                            s2_masks_file_path=config['val_s2_masks_file_path'],
-                            s2_doy_file_path=config['val_s2_doy_file_path'],
-                            s1_asc_bands_file_path=config['val_s1_asc_bands_file_path'],
-                            s1_asc_doy_file_path=config['val_s1_asc_doy_file_path'],
-                            s1_desc_bands_file_path=config['val_s1_desc_bands_file_path'],
-                            s1_desc_doy_file_path=config['val_s1_desc_doy_file_path'],
-                            labels_path=config['val_labels_path'],
-                            field_id_path=config.get('field_id_path'),  # 可能为None
-                            sample_size_s2=config['sample_size_s2'],
-                            sample_size_s1=config['sample_size_s1'],
-                            min_valid_timesteps=0,
-                            standardize=True
-                        )
-                        val_loader = DataLoader(val_dataset, batch_size=512, shuffle=False, num_workers=0)
-
-                        model.eval()
-                        # 线性探针：返回 accuracy, F1, 以及混淆矩阵
-                        val_acc, val_f1, val_cm, val_cr = linear_probe_evaluate(
-                            model, 
-                            val_loader, 
-                            field_ids=field_ids,
-                            field_data_path=config.get('fielddata_csv_path'),
-                            training_ratio=config.get('training_ratio', 0.3),
-                            val_test_split_ratio=config.get('val_test_split_ratio', 1/7.0),
-                            classifier_type=config.get('classifier_type', 'lr'),
-                            num_inference=config.get('num_inference', 1),
-                            device=device
-                        )
-                        wandb.log({"val_acc": val_acc, "val_f1": val_f1}, step=step)
-                        logging.info(f"Validation at step {step}: val_acc={val_acc:.4f}, F1 Score={val_f1:.4f}")
-                        wandb.log({"classification_report_linear": wandb.Html("<pre>" + val_cr + "</pre>")}, step=step)
-                        logging.info(f"Classification Report:\n{val_cr}")
+                # 周期性保存检查点 + 验证
+                if (config['val_interval_steps'] > 0) and (step > 0) and (step % config['val_interval_steps'] == 0):
+                    # 首先清理所有进程的缓存
+                    torch.cuda.empty_cache()
+                    
+                    # 设置同步点，确保所有进程都达到这里
+                    dist.barrier()
+                    
+                    # 生成检查点保存路径
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    checkpoint_dir = os.path.join("checkpoints", "ssl")
+                    os.makedirs(checkpoint_dir, exist_ok=True)
+                    checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_{timestamp}.pt")
+                    
+                    # 保存FSDP模型检查点
+                    logging.info(f"Saving checkpoint at step {step} to {checkpoint_path}")
+                    save_fsdp_model(model, optimizer, config, checkpoint_path, step, epoch, local_rank)
+                    
+                    # 只在主进程上执行验证
+                    if local_rank == 0:
+                        logging.info(f"Starting validation at step {step}...")
                         
-                        # 绘制混淆矩阵
-                        fig, ax = plt.subplots(figsize=(8, 6))
-                        im = ax.imshow(val_cm, interpolation='nearest', cmap=plt.cm.Blues)
-                        ax.figure.colorbar(im, ax=ax)
-                        ax.set(
-                            xticks=range(val_cm.shape[1]),
-                            yticks=range(val_cm.shape[0]),
-                            xticklabels=range(val_cm.shape[1]),
-                            yticklabels=range(val_cm.shape[0]),
-                            title='Confusion Matrix',
-                            ylabel='True label',
-                            xlabel='Predicted label'
-                        )
-                        thresh = val_cm.max() / 2.
-                        for i in range(val_cm.shape[0]):
-                            for j in range(val_cm.shape[1]):
-                                ax.text(j, i, format(val_cm[i, j], 'd'),
-                                        ha="center", va="center",
-                                        color="white" if val_cm[i, j] > thresh else "black")
-                        fig.tight_layout()
-                        wandb.log({"val_confusion_matrix": wandb.Image(fig)}, step=step)
-                        plt.close(fig)
-
-                        global best_val_acc
-                        if val_acc > best_val_acc:
-                            best_val_acc = val_acc
-                            # 使用 FSDP 保存模型 - 使用 state_dict_type 确保正确保存
-                            full_state_dict_config = FullStateDictConfig(
-                                offload_to_cpu=True,
-                                rank0_only=True
-                            )
-                            
-                            # 只有 rank=0 保存完整模型
-                            with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, full_state_dict_config):
-                                state_dict = model.state_dict()
-                                if local_rank == 0:
+                        # 检查验证配置是否完整
+                        if all(config.get(k) for k in [
+                            'val_s2_bands_file_path',
+                            'val_s2_masks_file_path',
+                            'val_s2_doy_file_path',
+                            'val_s1_asc_bands_file_path',
+                            'val_s1_asc_doy_file_path',
+                            'val_s1_desc_bands_file_path',
+                            'val_s1_desc_doy_file_path',
+                            'val_labels_path'
+                        ]):
+                            try:
+                                # 导入验证数据集
+                                from datasets.ssl_dataset import AustrianCropValidation
+                                
+                                # 创建验证数据集和加载器
+                                val_dataset = AustrianCropValidation(
+                                    s2_bands_file_path=config['val_s2_bands_file_path'],
+                                    s2_masks_file_path=config['val_s2_masks_file_path'],
+                                    s2_doy_file_path=config['val_s2_doy_file_path'],
+                                    s1_asc_bands_file_path=config['val_s1_asc_bands_file_path'],
+                                    s1_asc_doy_file_path=config['val_s1_asc_doy_file_path'],
+                                    s1_desc_bands_file_path=config['val_s1_desc_bands_file_path'],
+                                    s1_desc_doy_file_path=config['val_s1_desc_doy_file_path'],
+                                    labels_path=config['val_labels_path'],
+                                    field_id_path=config.get('field_id_path'),
+                                    sample_size_s2=config['sample_size_s2'],
+                                    sample_size_s1=config['sample_size_s1'],
+                                    min_valid_timesteps=0,
+                                    standardize=True
+                                )
+                                val_loader = DataLoader(val_dataset, batch_size=512, shuffle=False, num_workers=0)
+                                
+                                # 从检查点加载模型进行评估
+                                eval_model = load_model_from_checkpoint(checkpoint_path, config, device)
+                                
+                                # 运行评估
+                                val_acc, val_f1, val_cm, val_cr = linear_probe_evaluate(
+                                    eval_model,
+                                    val_loader,
+                                    field_ids=field_ids,
+                                    field_data_path=config.get('fielddata_csv_path'),
+                                    training_ratio=config.get('training_ratio', 0.3),
+                                    val_test_split_ratio=config.get('val_test_split_ratio', 1/7.0),
+                                    classifier_type=config.get('classifier_type', 'lr'),
+                                    num_inference=config.get('num_inference', 1),
+                                    device=device,
+                                    apply_amp=apply_amp
+                                )
+                                
+                                # 记录结果
+                                wandb.log({"val_acc": val_acc, "val_f1": val_f1}, step=step)
+                                logging.info(f"Validation at step {step}: val_acc={val_acc:.4f}, F1 Score={val_f1:.4f}")
+                                wandb.log({"classification_report_linear": wandb.Html("<pre>" + val_cr + "</pre>")}, step=step)
+                                logging.info(f"Classification Report:\n{val_cr}")
+                                
+                                # 绘制混淆矩阵
+                                fig, ax = plt.subplots(figsize=(8, 6))
+                                im = ax.imshow(val_cm, interpolation='nearest', cmap=plt.cm.Blues)
+                                ax.figure.colorbar(im, ax=ax)
+                                ax.set(
+                                    xticks=range(val_cm.shape[1]),
+                                    yticks=range(val_cm.shape[0]),
+                                    xticklabels=range(val_cm.shape[1]),
+                                    yticklabels=range(val_cm.shape[0]),
+                                    title='Confusion Matrix',
+                                    ylabel='True label',
+                                    xlabel='Predicted label'
+                                )
+                                thresh = val_cm.max() / 2.
+                                for i in range(val_cm.shape[0]):
+                                    for j in range(val_cm.shape[1]):
+                                        ax.text(j, i, format(val_cm[i, j], 'd'),
+                                                ha="center", va="center",
+                                                color="white" if val_cm[i, j] > thresh else "black")
+                                fig.tight_layout()
+                                wandb.log({"val_confusion_matrix": wandb.Image(fig)}, step=step)
+                                plt.close(fig)
+                                
+                                # 保存最佳模型
+                                global best_val_acc
+                                best_ckpt_path = os.path.join(checkpoint_dir, f"best_model_fsdp_{timestamp}.pt")
+                                if val_acc > best_val_acc:
+                                    best_val_acc = val_acc
                                     logging.info(f"Saving best model with val_acc={val_acc:.4f} to {best_ckpt_path}")
                                     torch.save({
                                         'epoch': epoch,
                                         'step': step,
-                                        'model_state_dict': state_dict,
-                                        'optimizer_state_dict': optimizer.state_dict(),
+                                        'model_state_dict': eval_model.state_dict(),
                                         'best_val_acc': best_val_acc,
                                     }, best_ckpt_path)
-                        
-                        model.train()
+                                
+                                # 清理
+                                del eval_model
+                                del val_dataset
+                                del val_loader
+                                
+                            except Exception as e:
+                                logging.error(f"Validation error: {e}")
+                                import traceback
+                                logging.error(traceback.format_exc())
+                            finally:
+                                # 确保内存清理
+                                torch.cuda.empty_cache()
+                                gc.collect()
+                    
+                    # 验证后同步进程
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    dist.barrier()
+                    
+                    # 恢复训练状态
+                    model.train()
 
                 step += 1  # 全局step
 
@@ -853,10 +1100,8 @@ def main():
         rolling_loss = []
         global best_val_acc
         best_val_acc = 0.0
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_fsdp_{timestamp}.pt")
 
-        # 确保checkpoints目录存在
+        # 创建checkpoints目录
         if local_rank == 0:
             os.makedirs(os.path.join("checkpoints", "ssl"), exist_ok=True)
 
@@ -920,6 +1165,10 @@ def main():
                 logging.info(f"Epoch {epoch} finished, current step = {step}")
                 # 记录每个epoch结束时的GPU内存使用
                 logging.info(f"GPU memory at end of epoch {epoch}: {get_gpu_memory_usage():.2f} MB")
+                
+                # 保存每个epoch结束时的检查点
+                # epoch_checkpoint_path = os.path.join("checkpoints", "ssl", f"checkpoint_epoch_{epoch}.pt")
+                # save_fsdp_model(model, optimizer, config, epoch_checkpoint_path, step, epoch, local_rank, is_final=(epoch == config['epochs']-1))
 
         if local_rank == 0:
             logging.info("Training completed.")
@@ -927,26 +1176,6 @@ def main():
                 wandb_run.finish()
 
         dist.destroy_process_group()
-
-# 添加单组学习率调度函数
-def adjust_single_group_lr(iter_count, total_iters, learning_rate, warmup_ratio=0.1, plateau_ratio=0.7):
-    """为单一参数组调整学习率"""
-    # # 先把学习率乘以0.2
-    # learning_rate *= 0.2
-    warmup_iters = int(total_iters * warmup_ratio)
-    plateau_iters = int(total_iters * plateau_ratio)
-    
-    if iter_count < warmup_iters:
-        # 预热阶段，线性增加学习率
-        return learning_rate * (iter_count / warmup_iters)
-    elif iter_count < plateau_iters:
-        # 稳定学习率阶段
-        return learning_rate
-    else:
-        # 余弦衰减阶段
-        decay_ratio = (iter_count - plateau_iters) / (total_iters - plateau_iters)
-        cosine_decay = 0.5 * (1 + math.cos(math.pi * decay_ratio))
-        return learning_rate * cosine_decay
 
 if __name__ == "__main__":
     main()

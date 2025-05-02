@@ -32,6 +32,10 @@ class BarlowTwinsLoss(nn.Module):
         return loss, on_diag_loss, off_diag_loss
 
 def compute_cross_correlation(z1, z2):
+    # Cast to float32 for numerical stability
+    z1 = z1.to(torch.float32)
+    z2 = z2.to(torch.float32)
+    
     B = z1.size(0)
     eps = 1e-9
     z1_mean = z1.mean(dim=0)
