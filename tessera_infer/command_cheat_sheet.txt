@@ -1,0 +1,28 @@
+# 创建目标目录
+mkdir -p /home/zf281/rds/rds-airr-p3-w8D3JcRiKZQ/biomassters/test_agbm_d_pixel
+
+# 一次性传输所有data_processed内容
+rsync -avz --progress --stats \
+  --include='20*/' \
+  --include='18*/' \
+  --include='19*/' \
+  --include='20*/data_processed/' \
+  --include='18*/data_processed/' \
+  --include='19*/data_processed/' \
+  --include='20*/data_processed/**' \
+  --include='18*/data_processed/**' \
+  --include='19*/data_processed/**' \
+  --exclude='Logs*' \
+  --exclude='*' \
+  zf281@daintree.cl.cam.ac.uk:/scratch/zf281/create_d-pixels_biomassters/data/test_agbm_d-pixel/ \
+  /home/zf281/rds/rds-airr-p3-w8D3JcRiKZQ/biomassters/test_agbm_d_pixel/
+
+# 重组文件结构（将data_processed内容移到父目录）
+cd /home/zf281/rds/rds-airr-p3-w8D3JcRiKZQ/biomassters/test_agbm_d_pixel/
+for dir in */; do
+    if [[ "$dir" =~ ^[0-9] ]] && [ -d "$dir/data_processed" ]; then
+        echo "处理 $dir"
+        mv "$dir/data_processed"/* "$dir/" 2>/dev/null
+        rmdir "$dir/data_processed" 2>/dev/null
+    fi
+done

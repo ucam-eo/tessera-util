@@ -9,3 +9,5 @@ log/
 *.out
 *.err
 training-data-preprocessing/target/
+*.json
+./kernel.errors.txt

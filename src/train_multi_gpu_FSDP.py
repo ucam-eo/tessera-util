@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # 运行方式:
-#   torchrun --nproc_per_node=8 --master_addr=127.0.0.1 --master_port=29500 src/train_multi_gpu_FSDP.py
+#   单节点: torchrun --nproc_per_node=8 --master_addr=127.0.0.1 --master_port=29500 src/train_multi_gpu_FSDP.py
+#   多节点: 
+#     节点1: torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 src/train_multi_gpu_FSDP.py
+#     节点2: torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 src/train_multi_gpu_FSDP.py
 
 import os
 os.environ["PYTORCH_SDP_DISABLE_FLASH_ATTENTION"] = "1"
@@ -57,7 +60,7 @@ import wandb
 import matplotlib.pyplot as plt
 
 # ============== 自定义模块 / 函数 ===============
-from models.modules import TransformerEncoder, ProjectionHead, SpectralTemporalTransformer
+from models.modules import TransformerEncoder, ProjectionHead
 from models.ssl_model import MultimodalBTModel, BarlowTwinsLoss, compute_cross_correlation
 from utils.lr_scheduler import adjust_learning_rate, LARS
 from utils.metrics import linear_probe_evaluate, rankme
@@ -250,7 +253,7 @@ def adjust_single_group_lr(iter_count, total_iters, learning_rate, warmup_ratio=
         return learning_rate * cosine_decay
 
 # 保存FSDP模型
-def save_fsdp_model(model, optimizer, config, filename, step, epoch, local_rank, is_final=False):
+def save_fsdp_model(model, optimizer, config, filename, step, epoch, global_rank, is_final=False):
     """
     保存FSDP模型的完整状态到磁盘
     
@@ -261,7 +264,7 @@ def save_fsdp_model(model, optimizer, config, filename, step, epoch, local_rank,
         filename: 保存文件路径
         step: 当前训练步数
         epoch: 当前训练周期
-        local_rank: 当前进程的本地排名
+        global_rank: 当前进程的全局排名
         is_final: 是否为最终模型保存
     """
     start_time = time.time()
@@ -294,8 +297,8 @@ def save_fsdp_model(model, optimizer, config, filename, step, epoch, local_rank,
         else:
             optim_state = None
         
-        # 只在rank=0上保存
-        if local_rank == 0:
+        # 只在global_rank=0上保存
+        if global_rank == 0:
             # 准备保存的数据
             checkpoint = {
                 'epoch': epoch,
@@ -317,7 +320,7 @@ def save_fsdp_model(model, optimizer, config, filename, step, epoch, local_rank,
     # 设置barrier等待保存完成
     dist.barrier()
     
-    return model_state if local_rank == 0 else None
+    return model_state if global_rank == 0 else None
 
 # 从检查点加载评估模型
 def load_model_from_checkpoint(checkpoint_path, config, device):
@@ -337,27 +340,28 @@ def load_model_from_checkpoint(checkpoint_path, config, device):
     # 创建一个新的评估模型
     eval_model = create_evaluation_model(config, device)
     
-    # 加载检查点
+    # 打印embedding参数
+    logging.info(f"Embedding weight when creating evaluation model: {eval_model.s2_backbone.embedding[0].weight}")
+    logging.info(f"Embedding bias when creating evaluation model: {eval_model.s2_backbone.embedding[0].bias}")
+    
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model_state_dict = checkpoint['model_state_dict']
+    state_key = 'model_state' if 'model_state' in checkpoint else 'model_state_dict'
+    ################### 用于处理FSDP ###################
+    state_dict = checkpoint[state_key]
+    # 创建新的state_dict，移除"_orig_mod."前缀
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('_orig_mod.'):
+            new_key = key[len('_orig_mod.'):]  # 移除前缀
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    # 使用处理后的state_dict加载模型
+    eval_model.load_state_dict(new_state_dict, strict=True)
+    #####################################################
     
-    # 清理状态字典中的FSDP特定前缀
-    cleaned_state_dict = {}
-    for key, value in model_state_dict.items():
-        # 移除常见的FSDP前缀
-        clean_key = key
-        if '_fsdp_wrapped_module.' in key:
-            clean_key = key.replace('_fsdp_wrapped_module.', '')
-        if 'module.' in clean_key:
-            clean_key = clean_key.replace('module.', '')
-            
-        cleaned_state_dict[clean_key] = value
-    
-    # 加载状态字典
-    eval_model.load_state_dict(cleaned_state_dict, strict=False)
-    
-    # 验证模型是否正确加载
-    logging.info(f"Model loaded with {len(model_state_dict)} parameters")
+    # 打印加载权重后的embedding
+    # logging.info(f"Embedding value after loading: {eval_model.s2_backbone.embedding[0].weight}")
     
     # 设置为评估模式
     eval_model.eval()
@@ -368,24 +372,29 @@ def main():
     # 设置初始化种子
     torch.manual_seed(3407)
     np.random.seed(3407)
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     ########################################################################
     # 0) 初始化分布式环境 (使用 PyTorch 内置的 torchrun + FSDP)
     ########################################################################
-    # dist.init_process_group(backend='nccl')  # 在 AMD ROCm 上通常也使用 NCCL (其实底层是 RCCL)
-    dist.init_process_group(backend='nccl', timeout=timedelta(minutes=60))  # Set to 60 minutes or adjust as needed
+    dist.init_process_group(backend='nccl', timeout=timedelta(minutes=60))
 
     global_rank = dist.get_rank()
     world_size = dist.get_world_size()
 
     # 由 torchrun 传进来的本地进程索引
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    
+    # 计算节点数和每节点的进程数
+    nnodes = int(os.environ.get("GROUP_RANK", "0")) + 1 if "GROUP_RANK" in os.environ else 1
+    nproc_per_node = world_size // nnodes if nnodes > 1 else world_size
 
     # 设置当前设备
     torch.cuda.set_device(local_rank)
 
-    # 设置日志级别：rank=0 输出info日志，其它rank仅输出warning
-    if local_rank == 0:
+    # 设置日志级别：global_rank=0 输出info日志，其它rank仅输出warning
+    if global_rank == 0:
         logging.basicConfig(level=logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
     else:
@@ -405,17 +414,17 @@ def main():
 
     # 如果需要AMP
     apply_amp = config.get('apply_amp', False)
-    if local_rank == 0:
+    if global_rank == 0:
         logging.info(f"apply_amp = {apply_amp}")
 
     # 使用 CUDA 设备（AMD ROCm 下同样用 "cuda"）
     device = torch.device("cuda", local_rank)
 
-    if local_rank == 0:
-        logging.info(f"Running on {world_size} GPU(s). LocalRank={local_rank}, device={device}")
+    if global_rank == 0:
+        logging.info(f"Running on {world_size} GPU(s) across {nnodes} node(s). GlobalRank={global_rank}, LocalRank={local_rank}, device={device}")
         logging.info(f"Initial GPU memory usage: {get_gpu_memory_usage():.2f} MB")
     
-    if local_rank == 0:
+    if global_rank == 0:
         os.environ["WANDB_API_KEY"] = "b03eca52bd30c1fa9bf185ae3ee91d9276f2f92a"
 
     # 如果用户想禁用W&B获取git信息，可添加环境变量，避免 "dubious ownership" 警告
@@ -424,16 +433,15 @@ def main():
 
     # 读取 chunk_batch
     chunk_batch = config.get('chunk_batch', 40)
-    if local_rank == 0:
+    if global_rank == 0:
         logging.info(f"chunk_batch = {chunk_batch}")
 
     ########################################################################
     # 2) 准备W&B
     ########################################################################
     run_name = f"FSDP_BT_Iter_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    if local_rank == 0:
+    if global_rank == 0:
         wandb_run = wandb.init(project="btfm-iterable", name=run_name, config=config)
-        # wandb_run = wandb.init(project="btfm-iterable-temp", name=run_name, config=config)
         
         # 存入源代码
         artifact = wandb.Artifact('source-code', type='code')
@@ -452,7 +460,7 @@ def main():
 
     # 计算总训练步数（可能并不精准，因为我们分块加载）
     total_steps = config['epochs'] * config['total_samples'] // config['batch_size'] // world_size
-    if local_rank == 0:
+    if global_rank == 0:
         logging.info(f"Total steps per rank (approx) = {total_steps}")
 
     ########################################################################
@@ -467,7 +475,7 @@ def main():
     s1_dim_feedforward = config['s1_dim_feedforward']
 
     # 也可记录到 wandb config（若需要）
-    if local_rank == 0:
+    if global_rank == 0:
         wandb.config.update({
             "s2_num_heads": s2_num_heads,
             "s2_num_layers": s2_num_layers,
@@ -518,10 +526,9 @@ def main():
     ).to(device)
 
     # 打印 FSDP 包装前的模型信息
-    if local_rank == 0:
+    if local_rank == 0:  # 每个节点的rank 0都打印一次，便于调试
         total_params = sum(p.numel() for p in model.parameters())
-        logging.info(f"Before FSDP wrapping - Total model parameters: {total_params:,}")
-        logging.info(f"Model structure before FSDP wrapping:\n{str(model)[:2000]}...")
+        logging.info(f"Node {global_rank//nproc_per_node}, LocalRank {local_rank} - Before FSDP wrapping - Total model parameters: {total_params:,}")
         logging.info(f"GPU memory usage before FSDP: {get_gpu_memory_usage():.2f} MB")
 
     # 设置损失函数
@@ -567,7 +574,7 @@ def main():
         fsdp_config["mixed_precision"] = mixed_precision_policy
 
     # 打印FSDP配置信息
-    if local_rank == 0:
+    if global_rank == 0:
         logging.info("FSDP Configuration:")
         config_str = json.dumps({k: str(v) for k, v in fsdp_config.items()}, indent=2)
         logging.info(config_str)
@@ -575,39 +582,31 @@ def main():
     # 加载验证集的field ID数据（如果配置中提供了路径）
     field_ids = None
     if 'field_id_path' in config and os.path.exists(config['field_id_path']):
-        logging.info(f"Loading field IDs from {config['field_id_path']}")
+        if global_rank == 0:
+            logging.info(f"Loading field IDs from {config['field_id_path']}")
         field_ids = np.load(config['field_id_path'])
-        logging.info(f"Field IDs loaded, shape: {field_ids.shape}")
+        if global_rank == 0:
+            logging.info(f"Field IDs loaded, shape: {field_ids.shape}")
 
     # 使用 FSDP 包装模型
     with (attn.sdpa_kernel(attn.SDPBackend.MATH) if config.get('use_torch_compile', False) else nullcontext()):
         # 使用 FSDP 包装模型
         model = FSDP(model, **fsdp_config)
         
-        # 打印包装后的模型结构（只在rank=0上打印）
-        if local_rank == 0:
+        # 打印包装后的模型结构（只在global_rank=0上打印）
+        if global_rank == 0:
             logging.info(f"Model structure after FSDP wrapping:\n{str(model)[:5000]}...")
             
             # 获取每个rank上的参数数量
             fsdp_params = sum(p.numel() for p in model.parameters())
-            logging.info(f"After FSDP wrapping - Parameters on rank {local_rank}: {fsdp_params:,}")
+            logging.info(f"After FSDP wrapping - Parameters on rank {global_rank}: {fsdp_params:,}")
             
             # 打印内存使用情况
             logging.info(f"GPU memory usage after FSDP: {get_gpu_memory_usage():.2f} MB")
-            
-            # 打印参数统计
-            total_params_before = total_params
-            sharded_ratio = fsdp_params / total_params_before
-            logging.info(f"Sharding ratio: {sharded_ratio:.4f} (lower means better distribution)")
-            
-            # 根据world_size计算理想的分片比例
-            ideal_ratio = 1.0 / world_size
-            logging.info(f"Ideal sharding ratio: {ideal_ratio:.4f}")
         
         if config.get('use_torch_compile', False):
             model = torch.compile(model, mode="default", dynamic=True)
-            # model = torch.compile(model, mode="max-autotune", dynamic=True)
-            if local_rank == 0:
+            if global_rank == 0:
                 logging.info("Using torch.compile to optimize the model...")
 
         # 分别收集所有GPU上的参数数量（用于确认分片是否均匀）
@@ -618,7 +617,7 @@ def main():
         # 收集所有rank的参数数量
         dist.all_gather(all_ranks_param_counts, local_count_tensor)
         
-        if local_rank == 0:
+        if global_rank == 0:
             rank_counts = [int(t.item()) for t in all_ranks_param_counts]
             logging.info(f"Parameter counts across all ranks: {rank_counts}")
             
@@ -628,9 +627,9 @@ def main():
             diff_percentage = (max_count - min_count) / max_count * 100
             
             if diff_percentage < 0.1:  # 允许0.1%的差异
-                logging.info(f"✅ Parameters are evenly distributed across GPUs (差异小于0.1%: {diff_percentage:.4f}%)")
+                logging.info(f"✓ Parameters are evenly distributed across GPUs (差异小于0.1%: {diff_percentage:.4f}%)")
             else:
-                logging.info(f"⚠️ Parameters are NOT evenly distributed across GPUs (差异: {diff_percentage:.4f}%)")
+                logging.info(f"⚠ Parameters are NOT evenly distributed across GPUs (差异: {diff_percentage:.4f}%)")
 
         # 创建优化器参数组的逻辑修正
         # 在FSDP中，我们直接使用模型的所有参数，然后根据形状分为权重和偏置组
@@ -649,7 +648,7 @@ def main():
                 else:
                     bias_params.append(param)
         
-        if local_rank == 0:
+        if global_rank == 0:
             logging.info(f"Number of weight parameters: {len(weight_params)}")
             logging.info(f"Number of bias parameters: {len(bias_params)}")
             
@@ -666,27 +665,20 @@ def main():
                 lr=config['learning_rate'], 
                 weight_decay=1e-6
             )
-            # optimizer = LARS(model.parameters(), lr=0, weight_decay=1e-6,
-            #         weight_decay_filter=True,
-            #         lars_adaptation_filter=True)
         else:
             # 创建具有两个参数组的优化器
             optimizer = torch.optim.AdamW(
                 [{'params': weight_params}, {'params': bias_params}],
                 lr=config['learning_rate'], 
                 weight_decay=1e-6)
-            # optimizer = LARS([{'params': weight_params}, {'params': bias_params}], lr=0, weight_decay=1e-6,
-            #     weight_decay_filter=True,
-            #     lars_adaptation_filter=True)
 
         # 打印weight_params和bias_params的数量
-        if local_rank == 0:
+        if global_rank == 0:
             logging.info("After building optimizer:")
             logging.info(f"Weight parameters: {len(weight_params)}")
             logging.info(f"Bias parameters: {len(bias_params)}")
         
         # 使用新的 GradScaler 写法（如果需要 AMP）
-        # scaler = torch.amp.GradScaler("cuda") if apply_amp else None
         scaler = torch.amp.GradScaler(
             init_scale=2**10,  # Start with a much lower scale (default is 2^16)
             growth_factor=1.5,  # Grow scale more slowly (default is 2.0)
@@ -694,7 +686,7 @@ def main():
             growth_interval=100  # Update less frequently
         ) if apply_amp else None
         
-        if local_rank == 0 and wandb_run is not None:
+        if global_rank == 0 and wandb_run is not None:
             # 注意：FSDP 下 wandb.watch 可能不会记录所有梯度和参数
             wandb.watch(model, log="gradients", log_freq=400)
 
@@ -884,8 +876,8 @@ def main():
                 batch_sz = s2_aug1.size(0)
                 examples += batch_sz
 
-                # 日志打印
-                if (step % config['log_interval_steps'] == 0) and (local_rank == 0):
+                # 日志打印 - 使用global_rank来控制
+                if (step % config['log_interval_steps'] == 0) and (global_rank == 0):
                     current_time = time.time()
                     exps = (examples - last_examples) / (current_time - last_time)
                     last_time = current_time
@@ -902,16 +894,12 @@ def main():
                         erank_z = 0.0
                         erank_repr = 0.0
                         logging.warning("Rank computation failed.")
-                    
-                    # 记录当前GPU内存使用情况
-                    # current_gpu_mem = get_gpu_memory_usage()
 
                     logging.info(
                         f"[Epoch={epoch}, Step={step}] "
                         f"Loss={loss_main.item():.2f}, MixLoss={loss_mix:.2f}, AvgLoss={avg_loss:.2f}, "
                         f"LR={current_lr:.4f}, batchsize={batch_sz}, Examples/sec={exps:.2f}, "
-                        f"Rank(z)={erank_z:.4f}, Rank(repr)={erank_repr:.4f}, "
-                        # f"GPU_Mem={current_gpu_mem:.2f}MB"
+                        f"Rank(z)={erank_z:.4f}, Rank(repr)={erank_repr:.4f}"
                     )
 
                     wandb_dict = {
@@ -924,7 +912,6 @@ def main():
                         "total_loss": total_loss.item(),
                         "rank_z": erank_z,
                         "rank_repr": erank_repr,
-                        # "gpu_memory_usage_mb": current_gpu_mem
                     }
                     
                     progress_percentage = (step / total_steps) * 100
@@ -949,17 +936,22 @@ def main():
                     dist.barrier()
                     
                     # 生成检查点保存路径
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     checkpoint_dir = os.path.join("checkpoints", "ssl")
-                    os.makedirs(checkpoint_dir, exist_ok=True)
+                    if global_rank == 0:
+                        os.makedirs(checkpoint_dir, exist_ok=True)
+                    
+                    # 等待目录创建完成
+                    dist.barrier()
+                    
                     checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_{timestamp}.pt")
                     
                     # 保存FSDP模型检查点
-                    logging.info(f"Saving checkpoint at step {step} to {checkpoint_path}")
-                    save_fsdp_model(model, optimizer, config, checkpoint_path, step, epoch, local_rank)
+                    if global_rank == 0:
+                        logging.info(f"Saving checkpoint at step {step} to {checkpoint_path}")
+                    save_fsdp_model(model, optimizer, config, checkpoint_path, step, epoch, global_rank)
                     
                     # 只在主进程上执行验证
-                    if local_rank == 0:
+                    if global_rank == 0:
                         logging.info(f"Starting validation at step {step}...")
                         
                         # 检查验证配置是否完整
@@ -1102,15 +1094,15 @@ def main():
         best_val_acc = 0.0
 
         # 创建checkpoints目录
-        if local_rank == 0:
+        if global_rank == 0:
             os.makedirs(os.path.join("checkpoints", "ssl"), exist_ok=True)
 
         ########################################################################
         # ============== 开始多个 EPOCH ==============
         ########################################################################
         for epoch in range(config['epochs']):
-            # 如果你需要在每个epoch调用rust脚本生成数据，可以在rank=0上执行，然后dist.barrier()等待
-            if local_rank == 0:
+            # 只有全局rank 0执行数据生成
+            if global_rank == 0:
                 # 如果是第一个epoch，检查一下有没有上次run留下来的数据，有的话就不需要在这个epoch重新生成了
                 aug1_dir = os.path.join(config['data_root'], 'aug1')
                 aug2_dir = os.path.join(config['data_root'], 'aug2')
@@ -1125,27 +1117,32 @@ def main():
                     if num_files * 1000000 == config['total_samples']:
                         logging.info(f"Epoch {epoch}: Found existing data files, skipping rust_cmd...")
                     else:
-                        remove_dir(aug1_dir)
-                        remove_dir(aug2_dir)
+                        if os.path.exists(aug1_dir):
+                            remove_dir(aug1_dir)
+                        if os.path.exists(aug2_dir):
+                            remove_dir(aug2_dir)
                         logging.info(f"Epoch {epoch} started. Generating new training data via rust_cmd...")
                         subprocess.run(config['rust_cmd'], shell=True, check=True)
                         logging.info(f"Data generation finished for epoch {epoch}.")
                 else:
                     # 每个epoch都重新生成数据
-                    remove_dir(aug1_dir)
-                    remove_dir(aug2_dir)
+                    if os.path.exists(aug1_dir):
+                        remove_dir(aug1_dir)
+                    if os.path.exists(aug2_dir):
+                        remove_dir(aug2_dir)
                     logging.info(f"Epoch {epoch} started. Generating new training data via rust_cmd...")
                     subprocess.run(config['rust_cmd'], shell=True, check=True)
                     logging.info(f"Data generation finished for epoch {epoch}.")
 
+            # 等待数据生成完成
             dist.barrier()
 
-            # 收集当前数据文件名
+            # 收集当前数据文件名 (所有进程都需要访问这些文件)
             aug1_s2_dir = os.path.join(config['data_root'], 'aug1', 's2')
             s2_file_names = os.listdir(aug1_s2_dir)
             np.random.shuffle(s2_file_names)
             total_files = len(s2_file_names)
-            if local_rank == 0:
+            if global_rank == 0:
                 logging.info(f"Epoch {epoch}: total new files = {total_files} in each folder")
 
             # 分块加载训练
@@ -1153,7 +1150,7 @@ def main():
             while chunk_start < total_files:
                 chunk_end = min(chunk_start + chunk_batch, total_files)
                 chunk_files = s2_file_names[chunk_start:chunk_end]
-                if local_rank == 0:
+                if global_rank == 0:
                     logging.info(f"Epoch {epoch}, chunk [{chunk_start}:{chunk_end}], loading {len(chunk_files)} files...")
 
                 step, examples, last_time, last_examples, rolling_loss = _train_one_chunk(
@@ -1161,16 +1158,12 @@ def main():
                 )
                 chunk_start = chunk_end
 
-            if local_rank == 0:
+            if global_rank == 0:
                 logging.info(f"Epoch {epoch} finished, current step = {step}")
                 # 记录每个epoch结束时的GPU内存使用
                 logging.info(f"GPU memory at end of epoch {epoch}: {get_gpu_memory_usage():.2f} MB")
-                
-                # 保存每个epoch结束时的检查点
-                # epoch_checkpoint_path = os.path.join("checkpoints", "ssl", f"checkpoint_epoch_{epoch}.pt")
-                # save_fsdp_model(model, optimizer, config, epoch_checkpoint_path, step, epoch, local_rank, is_final=(epoch == config['epochs']-1))
 
-        if local_rank == 0:
+        if global_rank == 0:
             logging.info("Training completed.")
             if wandb_run is not None:
                 wandb_run.finish()

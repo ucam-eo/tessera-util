@@ -271,14 +271,14 @@ fn process_tile(tile_dir: &Path, args: &Args) -> Result<Vec<SampleOut>> {
     let s2_doys: Array1<u16> = read_npy(tile_dir.join("doys.npy"))
         .with_context(|| format!("reading s2 doys in tile={}", tile_name))?;
 
-    // 读取 SAR 数据
+    // 读取 SAR 数据 - 修正：doy 文件应该读取为 i16
     let s1_asc_bands: Array4<i16> = read_npy(tile_dir.join("sar_ascending.npy"))
         .with_context(|| format!("reading s1 asc bands in tile={}", tile_name))?;
-    let s1_asc_doys: Array1<i32> = read_npy(tile_dir.join("sar_ascending_doy.npy"))
+    let s1_asc_doys: Array1<i16> = read_npy(tile_dir.join("sar_ascending_doy.npy"))
         .with_context(|| format!("reading s1 asc doys in tile={}", tile_name))?;
     let s1_desc_bands: Array4<i16> = read_npy(tile_dir.join("sar_descending.npy"))
         .with_context(|| format!("reading s1 desc bands in tile={}", tile_name))?;
-    let s1_desc_doys: Array1<i32> = read_npy(tile_dir.join("sar_descending_doy.npy"))
+    let s1_desc_doys: Array1<i16> = read_npy(tile_dir.join("sar_descending_doy.npy"))
         .with_context(|| format!("reading s1 desc doys in tile={}", tile_name))?;
 
     let shape_s2 = s2_bands.shape(); // [t_s2, H, W, 10]
@@ -405,11 +405,12 @@ fn sample_s2_pixel(
 /// 关键改动：
 /// 1. 将 asc 与 desc 中的有效帧合并后，对每次采样先随机选择 time_steps 个样本（允许重复），
 /// 2. 根据对应的 doy 值排序，从而保证输出的时间顺序与原始数据一致。
+/// 修正：参数类型从 i32 改为 i16
 fn sample_s1_pixel(
     asc_bands: &Array4<i16>,
-    asc_doys: &Array1<i32>,
+    asc_doys: &Array1<i16>,
     desc_bands: &Array4<i16>,
-    desc_doys: &Array1<i32>,
+    desc_doys: &Array1<i16>,
     yy: usize, xx: usize,
     time_steps: usize
 ) -> (Array2<f32>, Array2<f32>) {
@@ -440,7 +441,7 @@ fn sample_s1_pixel(
 
     for arr in [&mut arr1, &mut arr2].iter_mut() {
         // 采样 time_steps 个有效样本（允许重复），同时记录对应的 doy 值
-        let mut sampled_items: Vec<(bool, usize, i32)> = (0..time_steps)
+        let mut sampled_items: Vec<(bool, usize, i16)> = (0..time_steps)
             .map(|_| {
                 let (is_asc, idx) = merged_idx[rng.gen_range(0..n_valid)];
                 let doy = if is_asc { asc_doys[idx] } else { desc_doys[idx] };

@@ -278,14 +278,14 @@ fn process_tile(tile_dir: &Path, args: &Args) -> Result<Vec<SampleOut>> {
     let s2_doys: Array1<u16> = read_npy(tile_dir.join("doys.npy"))
         .with_context(|| format!("reading s2 doys in tile={}", tile_name))?;
 
-    // 读取 SAR 数据
+    // 读取 SAR 数据 - 修改这里：doy 数据类型改为 i16
     let s1_asc_bands: Array4<i16> = read_npy(tile_dir.join("sar_ascending.npy"))
         .with_context(|| format!("reading s1 asc bands in tile={}", tile_name))?;
-    let s1_asc_doys: Array1<i32> = read_npy(tile_dir.join("sar_ascending_doy.npy"))
+    let s1_asc_doys: Array1<i16> = read_npy(tile_dir.join("sar_ascending_doy.npy"))
         .with_context(|| format!("reading s1 asc doys in tile={}", tile_name))?;
     let s1_desc_bands: Array4<i16> = read_npy(tile_dir.join("sar_descending.npy"))
         .with_context(|| format!("reading s1 desc bands in tile={}", tile_name))?;
-    let s1_desc_doys: Array1<i32> = read_npy(tile_dir.join("sar_descending_doy.npy"))
+    let s1_desc_doys: Array1<i16> = read_npy(tile_dir.join("sar_descending_doy.npy"))
         .with_context(|| format!("reading s1 desc doys in tile={}", tile_name))?;
 
     let shape_s2 = s2_bands.shape(); // [t_s2, H, W, 10]
@@ -376,7 +376,7 @@ fn sample_s2_pixel(
 ) -> Array2<f32> {
     let n_valid = valid_idx.len();
     let mut rng = rand::thread_rng();
-    let mut out = Array2::<f32>::zeros((time_steps, 11));  // Changed from 12 to 11
+    let mut out = Array2::<f32>::zeros((time_steps, 11));
 
     for t in 0..time_steps {
         if n_valid == 0 { break; }
@@ -388,22 +388,23 @@ fn sample_s2_pixel(
             let normed = (rawv - S2_BAND_MEAN[b]) / (S2_BAND_STD[b] + 1e-9);
             tmp[b] = normed;
         }
-        let doy_f32 = s2_doys[pick] as f32;  // Convert DOY to float
+        let doy_f32 = s2_doys[pick] as f32;
 
         for b in 0..10 {
             out[(t, b)] = tmp[b];
         }
-        out[(t, 10)] = doy_f32;  // Directly add the DOY as float
+        out[(t, 10)] = doy_f32;
     }
     out
 }
 
 /// 对 S1：合并 asc 与 desc 数据，生成两个增广结果，结果 shape=(time_steps, 3)
+/// 修改函数签名：doy 数据类型改为 i16
 fn sample_s1_pixel(
     asc_bands: &Array4<i16>,
-    asc_doys: &Array1<i32>,
+    asc_doys: &Array1<i16>,
     desc_bands: &Array4<i16>,
-    desc_doys: &Array1<i32>,
+    desc_doys: &Array1<i16>,
     yy: usize, xx: usize,
     time_steps: usize
 ) -> (Array2<f32>, Array2<f32>) {
@@ -429,8 +430,8 @@ fn sample_s1_pixel(
     let n_valid = merged_idx.len();
     let mut rng = rand::thread_rng();
 
-    let mut arr1 = Array2::<f32>::zeros((time_steps, 3));  // Changed from 4 to 3
-    let mut arr2 = Array2::<f32>::zeros((time_steps, 3));  // Changed from 4 to 3
+    let mut arr1 = Array2::<f32>::zeros((time_steps, 3));
+    let mut arr2 = Array2::<f32>::zeros((time_steps, 3));
 
     for arr in [&mut arr1, &mut arr2] {
         for t in 0..time_steps {
@@ -440,18 +441,18 @@ fn sample_s1_pixel(
             let (raw_vv, raw_vh, doy_val) = if is_asc {
                 (asc_bands[(idx, yy, xx, 0)] as f32,
                  asc_bands[(idx, yy, xx, 1)] as f32,
-                 asc_doys[idx] as f32)  // Convert to float
+                 asc_doys[idx] as f32)
             } else {
                 (desc_bands[(idx, yy, xx, 0)] as f32,
                  desc_bands[(idx, yy, xx, 1)] as f32,
-                 desc_doys[idx] as f32)  // Convert to float
+                 desc_doys[idx] as f32)
             };
             let vv_norm = (raw_vv - S1_BAND_MEAN[0]) / (S1_BAND_STD[0] + 1e-9);
             let vh_norm = (raw_vh - S1_BAND_MEAN[1]) / (S1_BAND_STD[1] + 1e-9);
 
             arr[(t, 0)] = vv_norm;
             arr[(t, 1)] = vh_norm;
-            arr[(t, 2)] = doy_val;  // Directly add the DOY as float
+            arr[(t, 2)] = doy_val;
         }
     }
     (arr1, arr2)

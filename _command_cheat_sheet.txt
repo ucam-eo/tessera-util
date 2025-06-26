@@ -1,37 +1,27 @@
-docker run -it \
-  --cap-add=SYS_PTRACE \
-  --security-opt seccomp=unconfined \
-  --device=/dev/kfd \
-  --device=/dev/dri \
-  --group-add video \
-  --ipc=host \
-  --shm-size 1.5T \
-  -v /media/12TBNVME/frankfeng/btfm4rs:/workspace \
-  my-rocm:latest
+salloc --reservation=gpu-16_gpu-21_reservation --exclusive --mem=0 --nodelist=gpu-16
+salloc --reservation=gpu-16_gpu-21_reservation --exclusive --mem=0 --nodelist=gpu-21
+
+# 请求 2 个节点，每个节点 8 个 GPU，通过 Slurm
+salloc --exclusive --mem=0 --gres=gpu:8 --reservation=gpu-16_gpu-21_reservation -N 2
+
+torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 train_biomassters.py --train_fraction 1
+
+podman run -it --privileged --network=host --ipc=host -v $HOME/code:/workdir -v /shareddata:/shareddata -v /shared:/shared --workdir /workdir docker://rocm/pytorch:latest bash
+
+source /workdir/pangaea_env/bin/activate
+
+podman run -it --privileged --network=host --ipc=host \
+  -v $HOME/code:/workdir \
+  -v /shareddata:/shareddata \
+  -v /shared:/shared \
+  -v $HOME/.local/podman-python-packages:/root/.local \
+  --workdir /workdir \
+  docker://rocm/pytorch:latest bash
 
 
-###########后台运行
-# Step 1: 启动容器到后台
-docker run -d \
-  --name my-training-container \
-  --cap-add=SYS_PTRACE \
-  --security-opt seccomp=unconfined \
-  --device=/dev/kfd \
-  --device=/dev/dri \
-  --group-add video \
-  --ipc=host \
-  --shm-size 1.5T \
-  -v /media/12TBNVME/frankfeng/btfm4rs:/workspace \
-  -w /workspace \
-  my-rocm:latest \
-  tail -f /dev/null
-
-# Step 2: 在容器后台运行 Python 程序
-docker exec -d my-training-container \
-  torchrun --nproc_per_node=8 \
-  --master_addr=127.0.0.1 \
-  --master_port=29500 \
-  src/train_multi_gpu_FSDP.py
-
-# Step 3: 查看日志
-docker logs -f my-rocm-container
+# Pangaea Env
+podman run -it --privileged --network=host --ipc=host \
+  -v $HOME/code:/workdir \
+  -v /shareddata:/shareddata \
+  -v /shared:/shared \
+  pangaea-rocm:latest bash
