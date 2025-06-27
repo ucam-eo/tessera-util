@@ -19,7 +19,7 @@ infer_pastis_patch.py
        --config configs/pastis_patch_infer_config.py \
        --verbose \
        --visualize \
-       --max_patch_batch_size 100
+       --max_patch_batch_size 200
 
 如需覆盖部分配置，可使用命令行参数 (--patch_root, --output_dir, 等)。
 """
@@ -109,10 +109,13 @@ def sample_s2_batch(s2_bands_batch, s2_masks_batch, s2_doys_batch,
         sub_doys  = s2_doys_batch[b, idx_chosen]
         if standardize:
             sub_bands = (sub_bands - band_means[b]) / (band_stds[b] + 1e-9)
-        doys_norm = sub_doys / 365.0
-        sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-        cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-        out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s2, 12)
+        # doys_norm = sub_doys / 365.0
+        # sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+        # cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+        # out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s2, 12)
+        
+        # 直接把doy放到sub_bands后面
+        out_arr = np.hstack([sub_bands, sub_doys.reshape(-1, 1)])  # (sample_size_s2, 11)
         out_list.append(out_arr.astype(np.float32))
     return np.stack(out_list, axis=0)
 
@@ -141,10 +144,12 @@ def sample_s1_batch(s1_asc_bands_batch, s1_asc_doys_batch,
         sub_doys  = s1_doys_all[idx_chosen]
         if standardize:
             sub_bands = (sub_bands - band_means[b]) / (band_stds[b] + 1e-9)
-        doys_norm = sub_doys / 365.0
-        sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-        cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-        out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s1, 4)
+        # doys_norm = sub_doys / 365.0
+        # sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+        # cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+        # out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s1, 4)
+        # 直接把doy放到sub_bands后面
+        out_arr = np.hstack([sub_bands, sub_doys.reshape(-1, 1)])  # (sample_size_s2, 11)
         out_list.append(out_arr.astype(np.float32))
     return np.stack(out_list, axis=0)
 
@@ -306,17 +311,35 @@ def main():
     ssl_model = build_ssl_model(config, device)
     checkpoint = torch.load(config["checkpoint_path"], map_location=device)
     state_key = "model_state" if "model_state" in checkpoint else "model_state_dict"
-    ssl_model.load_state_dict(checkpoint[state_key], strict=True)
+    
+    ################### 用于处理FSDP ###################
+    state_dict = checkpoint[state_key]
+    # 创建新的state_dict，移除"_orig_mod."前缀
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('_orig_mod.'):
+            new_key = key[len('_orig_mod.'):]  # 移除前缀
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    # 使用处理后的state_dict加载模型
+    ssl_model.load_state_dict(new_state_dict, strict=True)
+    #####################################################
+    
+    # ssl_model.load_state_dict(checkpoint[state_key], strict=True)
 
     for param in ssl_model.s2_backbone.parameters():
         param.requires_grad = False
     for param in ssl_model.s1_backbone.parameters():
         param.requires_grad = False
+    for param in ssl_model.dim_reducer.parameters():
+        param.requires_grad = False
 
     model = MultimodalBTInferenceModel(
         s2_backbone=ssl_model.s2_backbone,
         s1_backbone=ssl_model.s1_backbone,
-        fusion_method=config["fusion_method"]
+        fusion_method=config["fusion_method"],
+        dim_reducer=ssl_model.dim_reducer,
     ).to(device)
     model.eval()
 

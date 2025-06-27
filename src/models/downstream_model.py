@@ -36,6 +36,17 @@ class ClassificationHead(nn.Module):
         x = self.fc3(x)
         return x
     
+class LinearProbeHead(nn.Module):
+    """
+    下游线性探针任务的MLP
+    """
+    def __init__(self, input_dim, num_classes):
+        super(LinearProbeHead, self).__init__()
+        self.fc = nn.Linear(input_dim, num_classes)
+    
+    def forward(self, x):
+        return self.fc(x)
+    
 class RegressionHead(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super(RegressionHead, self).__init__()
@@ -59,12 +70,13 @@ class MultimodalDownstreamModel(nn.Module):
     """
     将SSL中训练好的s2和s1骨干接上下游任务head
     """
-    def __init__(self, s2_backbone, s1_backbone, head, fusion_method='sum'):
+    def __init__(self, s2_backbone, s1_backbone, head, dim_reducer, fusion_method):
         super().__init__()
         self.s2_backbone = s2_backbone
         self.s1_backbone = s1_backbone
         self.head = head
         self.fusion_method = fusion_method
+        self.dim_reducer = dim_reducer
 
     def forward(self, s2_x, s1_x):
         s2_repr = self.s2_backbone(s2_x)
@@ -75,5 +87,6 @@ class MultimodalDownstreamModel(nn.Module):
             fused_repr = s2_repr + s1_repr
         else:
             raise ValueError(f"Unsupported fusion method: {self.fusion_method}")
+        fused_repr = self.dim_reducer(fused_repr)
         out = self.head(fused_repr)
         return out

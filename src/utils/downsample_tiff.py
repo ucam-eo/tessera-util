@@ -4,23 +4,32 @@ from rasterio.enums import Resampling
 from rasterio.transform import Affine
 
 def downsample_tiff(input_path, scale_factor, output_path):
+    print("\n[INFO] 开始处理文件:", input_path)
+    
     with rasterio.open(input_path) as src:
-        # 计算新的宽度和高度
+        # 记录原始元数据
+        print(f"[原始文件] 波段数={src.count}, 宽度={src.width}, 高度={src.height}")
+        print(f"[原始文件] 分辨率: X={src.transform[0]:.2f} m, Y={-src.transform[4]:.2f} m")
+        print(f"[参数] 降采样因子={scale_factor:.1f}x")
+
+        # 计算新尺寸
         new_width = int(src.width / scale_factor)
         new_height = int(src.height / scale_factor)
+        print(f"[计算] 新宽度={new_width}, 新高度={new_height}")
 
-        # 使用重采样读取数据，默认采用平均重采样方法（适用于连续数据）
+        # 重采样读取
+        print("[操作] 正在执行重采样...")
         data = src.read(
-            out_shape=(
-                src.count,
-                new_height,
-                new_width
-            ),
+            out_shape=(src.count, new_height, new_width),
             resampling=Resampling.average
         )
 
-        # 计算新的仿射变换，新像元尺寸变大
-        new_transform = src.transform * Affine.scale(src.width / new_width, src.height / new_height)
+        # 更新变换矩阵
+        new_transform = src.transform * Affine.scale(
+            src.width / new_width, 
+            src.height / new_height
+        )
+        print(f"[变换] 新地理参考矩阵:\n{new_transform}")
 
         # 更新元数据
         kwargs = src.meta.copy()
@@ -30,10 +39,12 @@ def downsample_tiff(input_path, scale_factor, output_path):
             'transform': new_transform
         })
 
-    # 写入新的 TIFF 文件
+    # 写入新文件
     with rasterio.open(output_path, 'w', **kwargs) as dst:
         dst.write(data)
-    print(f"降采样后的 TIFF 文件已保存：{output_path}")
+        print(f"[输出] 文件已保存: {output_path}")
+        print(f"[输出] 波段数={kwargs['count']}, 宽度={kwargs['width']}, 高度={kwargs['height']}")
+        print(f"[输出] 新分辨率: X={new_transform[0]:.2f} m, Y={-new_transform[4]:.2f} m\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="使用 rasterio 降低 TIFF 文件分辨率")

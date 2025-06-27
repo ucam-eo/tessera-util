@@ -14,7 +14,6 @@ import torch
 import torch.nn as nn
 import torch.cuda.amp as amp
 import wandb
-import matplotlib.pyplot as plt
 
 from datasets.ssl_dataset import HDF5Dataset_Multimodal_Tiles_Iterable
 from models.modules import TransformerEncoder, ProjectionHead, SpectralTemporalTransformer
@@ -22,6 +21,7 @@ from models.ssl_model import MultimodalBTModel, BarlowTwinsLoss, compute_cross_c
 from utils.lr_scheduler import adjust_learning_rate
 from utils.metrics import linear_probe_evaluate, rankme
 from utils.misc import remove_dir, save_checkpoint, plot_cross_corr
+import matplotlib.pyplot as plt
 
 def parse_args():
     parser = argparse.ArgumentParser(description="SSL Training")
@@ -44,27 +44,46 @@ def main():
     run_name = f"BT_Iter_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     wandb_run = wandb.init(project="btfm-iterable", name=run_name, config=config)
 
+    total_steps = config['epochs'] * config['total_samples'] // config['batch_size']
+    logging.info(f"Total steps = {total_steps}")
+
     # 建立模型
+    # s2_enc = TransformerEncoder(
+    #     band_num=12,  # 例如 10个波段+sin/cos
+    #     latent_dim=config['latent_dim'],
+    #     nhead=16,
+    #     num_encoder_layers=32,
+    #     dim_feedforward=512,
+    #     dropout=0.1,
+    #     max_seq_len=config['sample_size_s2']
+    # ).to(device)
+    # s1_enc = TransformerEncoder(
+    #     band_num=4,   # 例如 2个波段+sin/cos
+    #     latent_dim=config['latent_dim'],
+    #     nhead=16,
+    #     num_encoder_layers=32,
+    #     dim_feedforward=512,
+    #     dropout=0.1,
+    #     max_seq_len=config['sample_size_s1']
+    # ).to(device)
     s2_enc = TransformerEncoder(
         band_num=12,  # 例如 10个波段+sin/cos
         latent_dim=config['latent_dim'],
-        nhead=8,
-        num_encoder_layers=16,
-        dim_feedforward=512,
+        nhead=16,
+        num_encoder_layers=31,
+        dim_feedforward=1024,
         dropout=0.1,
         max_seq_len=config['sample_size_s2']
     ).to(device)
     s1_enc = TransformerEncoder(
         band_num=4,   # 例如 2个波段+sin/cos
         latent_dim=config['latent_dim'],
-        nhead=8,
-        num_encoder_layers=16,
-        dim_feedforward=512,
+        nhead=4,
+        num_encoder_layers=8,
+        dim_feedforward=256,
         dropout=0.1,
         max_seq_len=config['sample_size_s1']
     ).to(device)
-    # s2_enc = SpectralTemporalTransformer(data_dim=12).to(device)
-    # s1_enc = SpectralTemporalTransformer(data_dim=4).to(device)
     
     if config['fusion_method'] == 'concat':
         proj_in_dim = config['latent_dim'] * 2
@@ -81,8 +100,10 @@ def main():
 
     weight_params = [p for n, p in model.named_parameters() if p.ndim > 1]
     bias_params   = [p for n, p in model.named_parameters() if p.ndim == 1]
-    optimizer = torch.optim.SGD([{'params': weight_params}, {'params': bias_params}],
-                                lr=config['learning_rate'], momentum=0.9, weight_decay=1e-6)
+    # optimizer = torch.optim.SGD([{'params': weight_params}, {'params': bias_params}],
+    #                             lr=config['learning_rate'], momentum=0.9, weight_decay=1e-6)
+    optimizer = torch.optim.AdamW([{'params': weight_params}, {'params': bias_params}],
+                               lr=config['learning_rate'], weight_decay=1e-6)
     scaler = amp.GradScaler()
 
     step = 0
@@ -92,27 +113,20 @@ def main():
     rolling_loss = []
     rolling_size = 40
     best_val_acc = 0.0
-    best_ckpt_path = os.path.join("checkpoints", "ssl", "best_model.pt")
+    # 获取时间戳
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    best_ckpt_path = os.path.join("checkpoints", "ssl", f"best_model_{timestamp}.pt")
 
     for epoch in range(config['epochs']):
-        # 生成新数据：删除旧数据并调用rust命令生成新数据
-        aug1_dir = os.path.join(config['data_root'], 'aug1')
-        aug2_dir = os.path.join(config['data_root'], 'aug2')
-        remove_dir(aug1_dir)
-        remove_dir(aug2_dir)
-        logging.info(f"Epoch {epoch} started. Generating new training data...")
-        subprocess.run(config['rust_cmd'], shell=True, check=True)
-        logging.info("Data generation finished. Loading new training data...")
-        # 获得chunk_size和min_valid_timesteps
-        chunk_size = int(config['rust_cmd'].split("--chunk-size ")[1].split(" ")[0])
-        min_valid_timesteps = int(config['rust_cmd'].split("--min-valid-timesteps ")[1].split(" ")[0])
-        output_dir = config['rust_cmd'].split("--output-dir ")[1].split(" ")[0]
-        #获取output_dir下的aug1下的s1文件夹，并获取文件夹下的文件数量
-        files_per_epoch = len(os.listdir(os.path.join(output_dir, 'aug1', 's1')))
-        # 计算总步数
-        total_steps = math.ceil(files_per_epoch * chunk_size * config['epochs'] / config['batch_size'])
-        logging.info(f"Total steps = {total_steps}")
-        logging.info(f"Steps per epoch = {total_steps // config['epochs']}")
+        # 生成新数据：删除旧数据并调用 rust 命令生成新数据
+        # aug1_dir = os.path.join(config['data_root'], 'aug1')
+        # aug2_dir = os.path.join(config['data_root'], 'aug2')
+        # remove_dir(aug1_dir)
+        # remove_dir(aug2_dir)
+        # logging.info(f"Epoch {epoch} started. Generating new training data...")
+        # subprocess.run(config['rust_cmd'], shell=True, check=True)
+        # logging.info("Data generation finished. Loading new training data...")
+
         dataset_train = HDF5Dataset_Multimodal_Tiles_Iterable(
             data_root=config['data_root'],
             min_valid_timesteps=config['min_valid_timesteps'],
@@ -169,7 +183,7 @@ def main():
             scaler.step(optimizer)
             scaler.update()
             examples += s2_aug1.size(0)
-            if step %  config['log_interval_steps'] == 0:
+            if step % config['log_interval_steps'] == 0:
                 current_time = time.time()
                 exps = (examples - last_examples) / (current_time - last_time)
                 last_time = current_time
@@ -177,7 +191,7 @@ def main():
                 rolling_loss.append(loss_main.item())
                 if len(rolling_loss) > rolling_size:
                     rolling_loss = rolling_loss[-rolling_size:]
-                avg_loss = sum(rolling_loss)/len(rolling_loss)
+                avg_loss = sum(rolling_loss) / len(rolling_loss)
                 current_lr = optimizer.param_groups[0]['lr']
                 erank_z = rankme(z1)
                 erank_repr = rankme(repr1)
@@ -195,23 +209,19 @@ def main():
                 }
                 cross_corr_img = None
                 cross_corr_img_repr = None
-                if step % (10*config['log_interval_steps']) == 0:
+                if step % (10 * config['log_interval_steps']) == 0:
                     try:
                         fig_cc = plot_cross_corr(z1, z2)
                         cross_corr_img = wandb.Image(fig_cc)
                         plt.close(fig_cc)
                     except Exception:
                         pass
-                    finally:
-                        plt.close('all')
                     try:
                         fig_cc_repr = plot_cross_corr(repr1, repr2)
                         cross_corr_img_repr = wandb.Image(fig_cc_repr)
                         plt.close(fig_cc_repr)
                     except Exception:
                         pass
-                    finally:
-                        plt.close('all')
                 if cross_corr_img:
                     wandb_dict["cross_corr"] = cross_corr_img
                 if cross_corr_img_repr:
@@ -242,9 +252,34 @@ def main():
                     )
                     val_loader = DataLoader(val_dataset, batch_size=512, shuffle=False, num_workers=0)
                     model.eval()
-                    val_acc = linear_probe_evaluate(model, val_loader, device=device)
-                    wandb.log({"val_acc": val_acc}, step=step)
-                    logging.info(f"Validation at step {step}: val_acc={val_acc:.4f}")
+                    # 调用新的 linear_probe_evaluate 函数计算 acc, f1 和混淆矩阵
+                    val_acc, val_f1, val_cm = linear_probe_evaluate(model, val_loader, device=device)
+                    wandb.log({"val_acc": val_acc, "val_f1": val_f1}, step=step)
+                    logging.info(f"Validation at step {step}: val_acc={val_acc:.4f}, F1 Score={val_f1:.4f}")
+                    logging.info(f"Confusion Matrix:\n{val_cm}")
+                    
+                    # 绘制混淆矩阵图像，并 log 到 wandb
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    im = ax.imshow(val_cm, interpolation='nearest', cmap=plt.cm.Blues)
+                    ax.figure.colorbar(im, ax=ax)
+                    ax.set(xticks=range(val_cm.shape[1]),
+                           yticks=range(val_cm.shape[0]),
+                           xticklabels=range(val_cm.shape[1]),
+                           yticklabels=range(val_cm.shape[0]),
+                           title='Confusion Matrix',
+                           ylabel='True label',
+                           xlabel='Predicted label')
+                    thresh = val_cm.max() / 2.
+                    for i in range(val_cm.shape[0]):
+                        for j in range(val_cm.shape[1]):
+                            ax.text(j, i, format(val_cm[i, j], 'd'),
+                                    ha="center", va="center",
+                                    color="white" if val_cm[i, j] > thresh else "black")
+                    fig.tight_layout()
+                    wandb.log({"val_confusion_matrix": wandb.Image(fig)}, step=step)
+                    # close the figure to avoid memory leak
+                    plt.close(fig)
+                    
                     if val_acc > best_val_acc:
                         best_val_acc = val_acc
                         save_checkpoint(model, optimizer, epoch, step, best_val_acc, best_ckpt_path)

@@ -1,4 +1,4 @@
-# src/train_downstream_austrian_crop.py
+# src/train_downstream_austrian_crop_by_class.py
 
 import os
 import time
@@ -10,13 +10,14 @@ import numpy as np
 import torch
 import wandb
 import tqdm
+from collections import Counter, defaultdict
 
 from torch.utils.data import DataLoader
 from torch import nn
 from torch.optim import AdamW
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 
-from datasets.downstream_dataset import AustrianCrop, austrian_crop_collate_fn
+from datasets.downstream_dataset import AustrianCropSelectByClass, select_pixels_by_class, austrian_crop_class_based_collate_fn
 from models.modules import TransformerEncoder, ProjectionHead
 from models.downstream_model import ClassificationHead, MultimodalDownstreamModel
 
@@ -41,12 +42,12 @@ class_names = [
 ]
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Downstream Classification Training")
+    parser = argparse.ArgumentParser(description="Downstream Classification Training with Class-Based Pixel Selection")
     parser.add_argument('--config', type=str, default="configs/downstream_config.py", help="Path to config file (e.g. configs/downstream_config.py)")
     return parser.parse_args()
 
 def main():
-    np.random.seed(42)
+    # np.random.seed(42)
     
     args_cli = parse_args()
     config_module = {}
@@ -54,12 +55,19 @@ def main():
         exec(f.read(), config_module)
     config = config_module['config']
 
+    # Add PIXELS_PER_CLASS and VAL_TEST_SPLIT_RATIO parameters if not in config
+    if 'PIXELS_PER_CLASS' not in config:
+        config['PIXELS_PER_CLASS'] = 1  # Default value
+    if 'VAL_TEST_SPLIT_RATIO' not in config:
+        config['VAL_TEST_SPLIT_RATIO'] = 1/7  # Default value
+
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     wandb_run = wandb.init(project="btfm-downstream", config=config)
-    # Step 1: 加载标签和field_ids
+    
+    # Step 1: Load labels
+    logging.info("Loading labels...")
     labels = np.load(config['labels_path']).astype(np.int64)
-    field_ids = np.load(config['field_ids_path']).astype(np.int64)
     unique_labels = np.unique(labels)
     num_classes = len(unique_labels)
     logging.info(f"Unique labels: {unique_labels}, num_classes={num_classes}")
@@ -67,41 +75,28 @@ def main():
     labels_remapped = np.vectorize(label_map.get)(labels)
     labels = labels_remapped
 
-    # Step 2: 根据CSV划分train/val/test
-    fielddata_df = pd.read_csv(config['updated_fielddata_csv'])
-    area_summary = fielddata_df.groupby('SNAR_CODE')['area_m2'].sum().reset_index()
-    area_summary.rename(columns={'area_m2': 'total_area'}, inplace=True)
-    all_selected_fids = []
-    for _, row in area_summary.iterrows():
-        sn_code = row['SNAR_CODE']
-        total_area = row['total_area']
-        target_area = total_area * config['training_ratio']
-        rows_sncode = fielddata_df[fielddata_df['SNAR_CODE'] == sn_code].sort_values(by='area_m2')
-        selected_fids = []
-        selected_area_sum = 0
-        for _, r2 in rows_sncode.iterrows():
-            if selected_area_sum < target_area:
-                selected_fids.append(int(r2['fid_1']))
-                selected_area_sum += r2['area_m2']
-            else:
-                break
-        all_selected_fids.extend(selected_fids)
-    all_selected_fids = list(set(all_selected_fids))
-    logging.info(f"Number of selected train field IDs: {len(all_selected_fids)}")
-    all_fields = fielddata_df['fid_1'].unique()
-    set_train = set(all_selected_fids)
-    set_all = set(all_fields)
-    remaining = list(set_all - set_train)
-    remaining = np.array(remaining)
-    np.random.shuffle(remaining)
-    val_count = int(len(remaining) * config['val_test_split_ratio'])
-    val_fids = remaining[:val_count]
-    test_fids = remaining[val_count:]
-    train_fids = np.array(all_selected_fids)
-    logging.info(f"Train fields: {len(train_fids)}, Val fields: {len(val_fids)}, Test fields: {len(test_fids)}")
+    # Step 2: Select pixels for training, validation, and testing
+    logging.info(f"Selecting pixels with {config['PIXELS_PER_CLASS']} pixels per class...")
+    train_indices, val_indices, test_indices = select_pixels_by_class(
+        labels, 
+        config['PIXELS_PER_CLASS'], 
+        config['VAL_TEST_SPLIT_RATIO']
+    )
+    logging.info(f"Selected {len(train_indices)} training pixels, {len(val_indices)} validation pixels, {len(test_indices)} test pixels")
 
-    # Step 3: 构建数据集和DataLoader
-    train_dataset = AustrianCrop(
+    # Count and log pixels per class in training set
+    train_class_counts = defaultdict(int)
+    for y, x in train_indices:
+        train_class_counts[labels[y, x]] += 1
+    
+    for cls in sorted(train_class_counts.keys()):
+        if cls == 0:  # Skip background
+            continue
+        class_name = class_names[cls-1] if cls-1 < len(class_names) else f"Class {cls}"
+        logging.info(f"Class {cls} ({class_name}): {train_class_counts[cls]} training pixels")
+
+    # Step 3: Create custom datasets using pixel indices
+    train_dataset = AustrianCropSelectByClass(
         s2_bands_file_path=config['s2_bands_file_path'],
         s2_masks_file_path=config['s2_masks_file_path'],
         s2_doy_file_path=config['s2_doy_file_path'],
@@ -110,14 +105,9 @@ def main():
         s1_desc_bands_file_path=config['s1_desc_bands_file_path'],
         s1_desc_doy_file_path=config['s1_desc_doy_file_path'],
         labels_path=config['labels_path'],
-        field_ids_path=config['field_ids_path'],
-        train_fids=train_fids,
-        val_fids=val_fids,
-        test_fids=test_fids,
-        lon_lat_path=config['lon_lat_path'],
-        t2m_path=config['t2m_path'],
-        lai_hv_path=config['lai_hv_path'],
-        lai_lv_path=config['lai_lv_path'],
+        train_indices=train_indices,
+        val_indices=val_indices,
+        test_indices=test_indices,
         split='train',
         shuffle=True,
         is_training=True,
@@ -126,7 +116,8 @@ def main():
         sample_size_s2=config['max_seq_len_s2'],
         sample_size_s1=config['max_seq_len_s1']
     )
-    val_dataset = AustrianCrop(
+    
+    val_dataset = AustrianCropSelectByClass(
         s2_bands_file_path=config['s2_bands_file_path'],
         s2_masks_file_path=config['s2_masks_file_path'],
         s2_doy_file_path=config['s2_doy_file_path'],
@@ -135,14 +126,9 @@ def main():
         s1_desc_bands_file_path=config['s1_desc_bands_file_path'],
         s1_desc_doy_file_path=config['s1_desc_doy_file_path'],
         labels_path=config['labels_path'],
-        field_ids_path=config['field_ids_path'],
-        train_fids=train_fids,
-        val_fids=val_fids,
-        test_fids=test_fids,
-        lon_lat_path=config['lon_lat_path'],
-        t2m_path=config['t2m_path'],
-        lai_hv_path=config['lai_hv_path'],
-        lai_lv_path=config['lai_lv_path'],
+        train_indices=train_indices,
+        val_indices=val_indices,
+        test_indices=test_indices,
         split='val',
         shuffle=False,
         is_training=False,
@@ -151,7 +137,8 @@ def main():
         sample_size_s2=config['max_seq_len_s2'],
         sample_size_s1=config['max_seq_len_s1']
     )
-    test_dataset = AustrianCrop(
+    
+    test_dataset = AustrianCropSelectByClass(
         s2_bands_file_path=config['s2_bands_file_path'],
         s2_masks_file_path=config['s2_masks_file_path'],
         s2_doy_file_path=config['s2_doy_file_path'],
@@ -160,14 +147,9 @@ def main():
         s1_desc_bands_file_path=config['s1_desc_bands_file_path'],
         s1_desc_doy_file_path=config['s1_desc_doy_file_path'],
         labels_path=config['labels_path'],
-        field_ids_path=config['field_ids_path'],
-        train_fids=train_fids,
-        val_fids=val_fids,
-        test_fids=test_fids,
-        lon_lat_path=config['lon_lat_path'],
-        t2m_path=config['t2m_path'],
-        lai_hv_path=config['lai_hv_path'],
-        lai_lv_path=config['lai_lv_path'],
+        train_indices=train_indices,
+        val_indices=val_indices,
+        test_indices=test_indices,
         split='test',
         shuffle=False,
         is_training=False,
@@ -176,14 +158,35 @@ def main():
         sample_size_s2=config['max_seq_len_s2'],
         sample_size_s1=config['max_seq_len_s1']
     )
-    train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True,
-                              num_workers=config['num_workers'], collate_fn=austrian_crop_collate_fn, pin_memory=True, drop_last=False)
-    val_loader = DataLoader(val_dataset, batch_size=config['batch_size'], shuffle=False,
-                            num_workers=config['num_workers'], collate_fn=austrian_crop_collate_fn)
-    test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False,
-                             num_workers=config['num_workers'], collate_fn=austrian_crop_collate_fn)
+    
+    # Create data loaders
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=config['batch_size'], 
+        shuffle=True,
+        num_workers=config['num_workers'], 
+        collate_fn=austrian_crop_class_based_collate_fn, 
+        pin_memory=True, 
+        drop_last=False
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=config['batch_size'], 
+        shuffle=False,
+        num_workers=config['num_workers'], 
+        collate_fn=austrian_crop_class_based_collate_fn
+    )
+    
+    test_loader = DataLoader(
+        test_dataset, 
+        batch_size=config['batch_size'], 
+        shuffle=False,
+        num_workers=config['num_workers'], 
+        collate_fn=austrian_crop_class_based_collate_fn
+    )
 
-    # Step 4: 构建SSL加载的骨干，并加载checkpoint
+    # Step 4: Build backbone network and load checkpoint
     latent_dim = config['latent_dim']
     s2_backbone_ssl = TransformerEncoder(
         band_num=10,
@@ -208,41 +211,39 @@ def main():
     else:
         input_dim_for_projector = latent_dim
     projector_ssl = ProjectionHead(input_dim_for_projector, config['projector_hidden_dim'], config['projector_out_dim'])
-    # 构建SSL模型，方便载入checkpoint
+    
+    # Build SSL model to load checkpoint
     from models.ssl_model import MultimodalBTModel
     ssl_model = MultimodalBTModel(s2_backbone_ssl, s1_backbone_ssl, projector_ssl,
                                   fusion_method=config['fusion_method'], return_repr=True).to(device)
     logging.info(f"Loading checkpoint from {config['checkpoint_path']}")
-    # 打印加载权重前的backbone权重
-    logging.info("Before loading checkpoint, s2_backbone weights:")
     
-    # self.fc_out = nn.Sequential(
-    #     nn.LayerNorm(latent_dim*4),
-    #     nn.Linear(latent_dim*4, latent_dim)
-    # )
+    # Print pre-loading weights
+    logging.info("Before loading checkpoint, s2_backbone weights:")
     logging.info(ssl_model.s2_backbone.embedding[0].weight)
+    
     checkpoint = torch.load(config['checkpoint_path'], map_location=device)
     state_key = 'model_state' if 'model_state' in checkpoint else 'model_state_dict'
     
-    ################### 用于处理FSDP ###################
+    ################### For FSDP processing ###################
     state_dict = checkpoint[state_key]
-    # 创建新的state_dict，移除"_orig_mod."前缀
+    # Create new state_dict, removing "_orig_mod." prefix
     new_state_dict = {}
     for key, value in state_dict.items():
         if key.startswith('_orig_mod.'):
-            new_key = key[len('_orig_mod.'):]  # 移除前缀
+            new_key = key[len('_orig_mod.'):]  # Remove prefix
             new_state_dict[new_key] = value
         else:
             new_state_dict[key] = value
-    # 使用处理后的state_dict加载模型
+    # Load processed state_dict
     ssl_model.load_state_dict(new_state_dict, strict=True)
     #####################################################
     
-    # ssl_model.load_state_dict(checkpoint[state_key], strict=True)
-    # 打印加载权重后的backbone权重
+    # Print post-loading weights
     logging.info("After loading checkpoint, s2_backbone weights:")
     logging.info(ssl_model.s2_backbone.embedding[0].weight)
-    # 冻结骨干
+    
+    # Freeze backbone
     for param in ssl_model.s2_backbone.parameters():
         param.requires_grad = False
     for param in ssl_model.s1_backbone.parameters():
@@ -250,20 +251,22 @@ def main():
     for param in ssl_model.dim_reducer.parameters():
         param.requires_grad = False
 
-    # Step 5: 构建下游分类头和完整模型
+    # Step 5: Build downstream classification head and complete model
     if config['fusion_method'] == 'concat':
         classification_in_dim = latent_dim
     else:
         classification_in_dim = latent_dim
     clf_head = ClassificationHead(input_dim=classification_in_dim, num_classes=num_classes).to(device)
     downstream_model = MultimodalDownstreamModel(s2_backbone=ssl_model.s2_backbone,
-                                                  s1_backbone=ssl_model.s1_backbone,
-                                                  head=clf_head,
-                                                  dim_reducer=ssl_model.dim_reducer,
-                                                  fusion_method=config['fusion_method']).to(device)
-    # 打印模型构建后backbone权重
+                                                 s1_backbone=ssl_model.s1_backbone,
+                                                 head=clf_head,
+                                                 dim_reducer=ssl_model.dim_reducer,
+                                                 fusion_method=config['fusion_method']).to(device)
+    
+    # Print post-construction weights
     logging.info("After constructing downstream model, s2_backbone weights:")
     logging.info(downstream_model.s2_backbone.embedding[0].weight)
+    
     optimizer = AdamW(filter(lambda p: p.requires_grad, downstream_model.parameters()),
                       lr=config['lr'], weight_decay=config['weight_decay'])
     criterion = nn.CrossEntropyLoss().to(device)
@@ -302,6 +305,9 @@ def main():
             "train_f1": train_f1
         }, step=epoch)
         # ---- Validation
+        # 只在30个epoch后进行验证
+        if epoch < 30:
+            continue
         downstream_model.eval()
         val_preds, val_targets = [], []
         with torch.no_grad():
@@ -347,8 +353,9 @@ def main():
     logging.info(f"Classification Report:\n{report}")
     cm_df = pd.DataFrame(conf_mat, index=class_names, columns=class_names)
     logging.info(f"\nConfusion Matrix:\n{cm_df}")
-    # 保存测试结果到txt文件
-    with open(os.path.join("logs", "austrian_crop_results.txt"), "w") as f:
+    # Save test results to txt file
+    os.makedirs("logs", exist_ok=True)
+    with open(os.path.join("logs", "austrian_crop_results_by_class.txt"), "w") as f:
         f.write(f"Test Acc: {test_acc:.4f}\n")
         f.write(f"Test F1: {test_f1:.4f}\n")
         f.write(f"Classification Report:\n{report}\n")
