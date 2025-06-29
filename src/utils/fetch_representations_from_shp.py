@@ -2,6 +2,7 @@
 """
 Grid Data Downloader with Shapefile Intersection - Optimized Version
 Downloads grid data from remote server based on shapefile intersection using rsync
+Now includes TIFF file downloads alongside NPY files
 """
 
 import os
@@ -256,6 +257,123 @@ class OptimizedGridDownloader:
         
         return existing_grids
         
+    def download_tiff_files(self, existing_grids, output_base):
+        """
+        Download TIFF files for all grids
+        
+        Args:
+            existing_grids: Dict mapping year to list of (lon, lat) tuples
+            output_base: Base output directory
+        """
+        logger.info("Downloading TIFF files...")
+        
+        # Get unique grids across all years
+        unique_grids = set()
+        for grids in existing_grids.values():
+            unique_grids.update(grids)
+        
+        if not unique_grids:
+            logger.warning("No grids to download TIFF files for!")
+            return
+            
+        logger.info(f"Downloading TIFF files for {len(unique_grids)} unique grids")
+        
+        # Create temporary directory for file lists
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create file list for TIFF files
+            file_list_path = os.path.join(temp_dir, "tiff_files.txt")
+            
+            # Map to store which years each grid appears in
+            grid_to_years = {}
+            for year, grids in existing_grids.items():
+                for lon, lat in grids:
+                    if (lon, lat) not in grid_to_years:
+                        grid_to_years[(lon, lat)] = []
+                    grid_to_years[(lon, lat)].append(year)
+            
+            # Write TIFF file names to list
+            with open(file_list_path, 'w') as f:
+                for lon, lat in unique_grids:
+                    f.write(f"grid_{lon}_{lat}.tiff\n")
+            
+            # Download all TIFF files to a temporary location first
+            temp_tiff_dir = os.path.join(temp_dir, "tiffs")
+            os.makedirs(temp_tiff_dir, exist_ok=True)
+            
+            # Construct rsync command
+            source = f"{self.username}@{self.hostname}:{self.remote_tiff_path}/"
+            
+            rsync_cmd = [
+                'rsync',
+                '-avz',  # archive, verbose, compress
+                '--no-group',  # don't preserve group ownership
+                '--files-from', file_list_path,
+                source,
+                temp_tiff_dir
+            ]
+            
+            # Execute rsync
+            try:
+                logger.info(f"Running rsync for TIFF files...")
+                
+                process = subprocess.Popen(
+                    rsync_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                
+                # Process output in real-time
+                tiff_count = 0
+                while True:
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    if output and '.tiff' in output:
+                        match = re.search(r'grid_-?\d+\.?\d*_-?\d+\.?\d*\.tiff', output)
+                        if match:
+                            tiff_count += 1
+                            if tiff_count <= 5:
+                                tqdm.write(f"  ✓ Downloaded TIFF: {match.group()}")
+                
+                # Wait for process to complete
+                process.wait()
+                
+                if process.returncode != 0:
+                    stderr = process.stderr.read()
+                    if process.returncode == 23 and "some files/attrs were not transferred" in stderr:
+                        logger.warning("TIFF files transferred but with permission warnings (this is usually harmless)")
+                    else:
+                        logger.error(f"rsync failed for TIFF files: {stderr}")
+                        return
+                
+                if tiff_count > 5:
+                    tqdm.write(f"  ... and {tiff_count - 5} more TIFF files")
+                    
+                # Now copy TIFF files to their respective grid folders
+                logger.info("Copying TIFF files to grid folders...")
+                
+                with tqdm(total=sum(len(years) for years in grid_to_years.values()), 
+                         desc="Copying TIFF files") as pbar:
+                    for (lon, lat), years in grid_to_years.items():
+                        tiff_filename = f"grid_{lon}_{lat}.tiff"
+                        source_tiff = os.path.join(temp_tiff_dir, tiff_filename)
+                        
+                        if os.path.exists(source_tiff):
+                            # Copy to each year directory where this grid exists
+                            for year in years:
+                                dest_dir = os.path.join(output_base, str(year), f"grid_{lon}_{lat}")
+                                if os.path.exists(dest_dir):
+                                    dest_tiff = os.path.join(dest_dir, tiff_filename)
+                                    shutil.copy2(source_tiff, dest_tiff)
+                                    pbar.update(1)
+                        else:
+                            logger.warning(f"TIFF file not found: {tiff_filename}")
+                            pbar.update(len(years))
+                            
+            except Exception as e:
+                logger.error(f"Error downloading TIFF files: {e}")
+                
     def download_with_rsync(self, existing_grids, output_base):
         """
         Download grids using rsync for better performance
@@ -358,6 +476,9 @@ class OptimizedGridDownloader:
                             
                     except Exception as e:
                         logger.error(f"Error downloading year {year}: {e}")
+        
+        # Now download TIFF files
+        self.download_tiff_files(existing_grids, output_base)
                         
         logger.info(f"Download process completed! Total grids downloaded: {downloaded_count}")
         
@@ -399,7 +520,7 @@ Example usage:
     
     # Print header
     logger.info("="*60)
-    logger.info("GRID DATA DOWNLOADER (OPTIMIZED)")
+    logger.info("GRID DATA DOWNLOADER (OPTIMIZED WITH TIFF)")
     logger.info("="*60)
     logger.info(f"Shapefile: {args.shapefile}")
     logger.info(f"Output directory: {args.output}")

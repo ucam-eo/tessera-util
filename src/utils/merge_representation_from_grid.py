@@ -183,18 +183,19 @@ def determine_best_projection(tiff_paths, sample_size=100, force_projected=True)
     
     return target_crs
 
-def create_multiband_tiff(grid_folder, tiff_dir, output_dir, downsample_factor=1, target_crs='EPSG:32630', rgb_only=False):
-    """Create a temporary multi-band TIFF file for each grid, unified to target CRS"""
+def create_multiband_data(grid_folder, temp_dir, downsample_factor=1, target_crs='EPSG:32630', rgb_only=False):
+    """Create temporary multi-band TIFF and scales files for each grid, unified to target CRS"""
     try:
         grid_name = os.path.basename(grid_folder)
         npy_path = os.path.join(grid_folder, f"{grid_name}.npy")
-        tiff_path = os.path.join(tiff_dir, f"{grid_name}.tiff")
+        scales_path = os.path.join(grid_folder, f"{grid_name}_scales.npy")
+        tiff_path = os.path.join(grid_folder, f"{grid_name}.tiff")
         
         if not os.path.exists(npy_path) or not os.path.exists(tiff_path):
             print(f"Missing files for {grid_name}")
             return None
         
-        # Read geographic information
+        # Read geographic information from the TIFF in the same folder
         with rasterio.open(tiff_path) as src:
             src_transform = src.transform
             src_crs = src.crs
@@ -204,23 +205,33 @@ def create_multiband_tiff(grid_folder, tiff_dir, output_dir, downsample_factor=1
         npy_mmap = np.load(npy_path, mmap_mode='r')
         h, w, c = npy_mmap.shape
         
+        # Check if scales file exists
+        has_scales = os.path.exists(scales_path)
+        scales_data = None
+        if has_scales:
+            scales_mmap = np.load(scales_path, mmap_mode='r')
+        
         # Determine number of bands to process
         num_bands_to_process = 3 if rgb_only else c
         
-        print(f"Processing {grid_name}: shape {h}x{w}x{c}, using {num_bands_to_process} bands")
+        print(f"Processing {grid_name}: shape {h}x{w}x{c}, using {num_bands_to_process} bands, scales: {has_scales}")
         
         # Downsample if needed
         if downsample_factor > 1:
             data = npy_mmap[::downsample_factor, ::downsample_factor, :num_bands_to_process].copy()
+            if has_scales:
+                scales_data = scales_mmap[::downsample_factor, ::downsample_factor].copy()
         else:
             data = npy_mmap[:, :, :num_bands_to_process].copy()
+            if has_scales:
+                scales_data = scales_mmap[:, :].copy()
         
-        # Scale to [0, 255] - assuming input range is [-127, 127]
-        data = (data.astype(np.float32) + 127.0) * (255.0 / 254.0)
-        data = np.clip(data, 0, 255).astype(np.uint8)
+        # Keep data as int8 - no scaling!
+        data = data.astype(np.int8)
         
         # Create temporary TIFF file
-        temp_tiff_path = os.path.join(output_dir, f"{grid_name}_multiband.tif")
+        temp_tiff_path = os.path.join(temp_dir, f"{grid_name}_multiband.tif")
+        temp_scales_path = os.path.join(temp_dir, f"{grid_name}_scales.npy") if has_scales else None
         
         # Adjust transform matrix for downsampling
         downsample_transform = src_transform * rasterio.Affine.scale(downsample_factor, downsample_factor)
@@ -237,7 +248,9 @@ def create_multiband_tiff(grid_folder, tiff_dir, output_dir, downsample_factor=1
             )
             
             # Create reprojected array
-            dst_data = np.zeros((dst_height, dst_width, num_bands), dtype=np.uint8)
+            dst_data = np.zeros((dst_height, dst_width, num_bands), dtype=np.int8)
+            if has_scales:
+                dst_scales = np.zeros((dst_height, dst_width), dtype=scales_data.dtype)
             
             # Reproject each band
             for i in range(num_bands):
@@ -250,6 +263,19 @@ def create_multiband_tiff(grid_folder, tiff_dir, output_dir, downsample_factor=1
                     dst_crs=target_crs,
                     resampling=Resampling.nearest
                 )
+            
+            # Reproject scales if present
+            if has_scales:
+                reproject(
+                    source=scales_data,
+                    destination=dst_scales,
+                    src_transform=downsample_transform,
+                    src_crs=src_crs,
+                    dst_transform=dst_transform,
+                    dst_crs=target_crs,
+                    resampling=Resampling.nearest
+                )
+                scales_data = dst_scales
             
             # Use reprojected data
             data = dst_data
@@ -268,7 +294,7 @@ def create_multiband_tiff(grid_folder, tiff_dir, output_dir, downsample_factor=1
             height=height,
             width=width,
             count=num_bands,
-            dtype='uint8',
+            dtype='int8',  # Keep as int8
             crs=crs,
             transform=transform,
             compress='lzw',
@@ -279,15 +305,24 @@ def create_multiband_tiff(grid_folder, tiff_dir, output_dir, downsample_factor=1
             for i in range(num_bands):
                 dst.write(data[:, :, i], i + 1)
         
+        # Save scales data if present
+        if has_scales and temp_scales_path:
+            np.save(temp_scales_path, scales_data)
+        
         del npy_mmap
+        if has_scales:
+            del scales_mmap
+            
         return {
             'path': temp_tiff_path,
+            'scales_path': temp_scales_path,
             'src_crs': str(src_crs),
             'grid_name': grid_name,
             'num_bands': num_bands,
             'bounds': bounds,
             'transform': transform,
-            'crs': crs
+            'crs': crs,
+            'has_scales': has_scales
         }
         
     except Exception as e:
@@ -329,8 +364,9 @@ def filter_tiles_by_dateline(tiff_info_list, filter_minority=True):
     
     return filtered_tiles
 
-def merge_multiband_optimized(tiff_info_list, resolution, output_path, target_crs, rgb_only=False, filter_cross_dateline_tiles=True):
-    """Merge multi-band TIFFs using the optimal projection"""
+def merge_multiband_optimized(tiff_info_list, resolution, output_path, scales_output_path, target_crs, 
+                            rgb_only=False, filter_cross_dateline_tiles=True, output_repr_format='tiff'):
+    """Merge multi-band TIFFs using the optimal projection and also merge scales"""
     try:
         if not tiff_info_list:
             return False
@@ -358,13 +394,14 @@ def merge_multiband_optimized(tiff_info_list, resolution, output_path, target_cr
             return False
             
         num_bands = tiff_info_list[0]['num_bands']
+        has_scales = any(info['has_scales'] for info in tiff_info_list)
         
         # Get bounds in target CRS
         all_bounds_target = []
         
         for info in tiff_info_list:
             with rasterio.open(info['path']) as src:
-                # All tiles should already be in target CRS from create_multiband_tiff
+                # All tiles should already be in target CRS from create_multiband_data
                 if str(src.crs) != str(target_crs):
                     print(f"Warning: tile {info['grid_name']} not in target CRS")
                 all_bounds_target.append(src.bounds)
@@ -399,65 +436,149 @@ def merge_multiband_optimized(tiff_info_list, resolution, output_path, target_cr
         # Create output transform
         transform = from_bounds(west, south, east, north, width, height)
         
-        # Create output file
-        with rasterio.open(
-            output_path,
-            'w',
-            driver='GTiff',
-            height=height,
-            width=width,
-            count=num_bands,
-            dtype='uint8',
-            crs=target_crs,
-            transform=transform,
-            compress='lzw',
-            tiled=True,
-            blockxsize=512,
-            blockysize=512,
-            BIGTIFF='YES'
-        ) as dst:
-            
-            # Process each band
-            for band_idx in tqdm(range(1, num_bands + 1), desc="Processing bands"):
-                # Create band array
-                band_data = np.zeros((height, width), dtype=np.uint8)
+        # Initialize arrays for merging
+        if output_repr_format == 'npy':
+            # Create arrays in memory for NPY output
+            merged_data = np.zeros((height, width, num_bands), dtype=np.int8)
+        
+        if has_scales:
+            # Determine scales dtype from first file with scales
+            scales_dtype = None
+            for info in tiff_info_list:
+                if info['has_scales'] and info['scales_path']:
+                    scales_dtype = np.load(info['scales_path'], mmap_mode='r').dtype
+                    break
+            merged_scales = np.zeros((height, width), dtype=scales_dtype if scales_dtype else np.float32)
+        
+        # Process based on output format
+        if output_repr_format == 'tiff':
+            # Create output TIFF file
+            with rasterio.open(
+                output_path,
+                'w',
+                driver='GTiff',
+                height=height,
+                width=width,
+                count=num_bands,
+                dtype='int8',  # Keep as int8
+                crs=target_crs,
+                transform=transform,
+                compress='lzw',
+                tiled=True,
+                blockxsize=512,
+                blockysize=512,
+                BIGTIFF='YES'
+            ) as dst:
                 
-                # Process each tile for this band
-                for info in tiff_info_list:
-                    with rasterio.open(info['path']) as src:
-                        # Read the band
-                        tile_band = src.read(band_idx)
-                        
-                        # Get tile bounds
-                        tile_bounds = src.bounds
-                        
-                        # Calculate window in output raster
-                        col_off = int((tile_bounds.left - west) / resolution_x)
-                        row_off = int((north - tile_bounds.top) / resolution_y)
-                        col_size = int((tile_bounds.right - tile_bounds.left) / resolution_x)
-                        row_size = int((tile_bounds.top - tile_bounds.bottom) / resolution_y)
-                        
-                        # Clip to output bounds
-                        if col_off < 0:
-                            col_size += col_off
-                            col_off = 0
-                        if row_off < 0:
-                            row_size += row_off
-                            row_off = 0
-                        if col_off + col_size > width:
-                            col_size = width - col_off
-                        if row_off + row_size > height:
-                            row_size = height - row_off
-                        
-                        if col_size <= 0 or row_size <= 0:
-                            continue
-                        
-                        # Resample tile to fit window if needed
-                        if (tile_band.shape[0] != row_size or tile_band.shape[1] != col_size):
-                            # Use rasterio's reproject for resampling
-                            temp_data = np.zeros((row_size, col_size), dtype=np.uint8)
+                # Process each band
+                for band_idx in tqdm(range(1, num_bands + 1), desc="Processing bands"):
+                    # Create band array
+                    band_data = np.zeros((height, width), dtype=np.int8)
+                    
+                    # Process each tile for this band
+                    for info in tiff_info_list:
+                        with rasterio.open(info['path']) as src:
+                            # Read the band
+                            tile_band = src.read(band_idx)
                             
-                            # Calculate transform for this window
+                            # Get tile bounds
+                            tile_bounds = src.bounds
+                            
+                            # Calculate window in output raster
+                            col_off = int((tile_bounds.left - west) / resolution_x)
+                            row_off = int((north - tile_bounds.top) / resolution_y)
+                            col_size = int((tile_bounds.right - tile_bounds.left) / resolution_x)
+                            row_size = int((tile_bounds.top - tile_bounds.bottom) / resolution_y)
+                            
+                            # Clip to output bounds
+                            if col_off < 0:
+                                col_size += col_off
+                                col_off = 0
+                            if row_off < 0:
+                                row_size += row_off
+                                row_off = 0
+                            if col_off + col_size > width:
+                                col_size = width - col_off
+                            if row_off + row_size > height:
+                                row_size = height - row_off
+                            
+                            if col_size <= 0 or row_size <= 0:
+                                continue
+                            
+                            # Resample tile to fit window if needed
+                            if (tile_band.shape[0] != row_size or tile_band.shape[1] != col_size):
+                                # Use rasterio's reproject for resampling
+                                temp_data = np.zeros((row_size, col_size), dtype=np.int8)
+                                
+                                # Calculate transform for this window
+                                win_west = west + col_off * resolution_x
+                                win_north = north - row_off * resolution_y
+                                win_transform = from_bounds(
+                                    win_west, win_north - row_size * resolution_y,
+                                    win_west + col_size * resolution_x, win_north,
+                                    col_size, row_size
+                                )
+                                
+                                reproject(
+                                    source=tile_band,
+                                    destination=temp_data,
+                                    src_transform=src.transform,
+                                    src_crs=src.crs,
+                                    dst_transform=win_transform,
+                                    dst_crs=target_crs,
+                                    resampling=Resampling.nearest
+                                )
+                                
+                                tile_data = temp_data
+                            else:
+                                tile_data = tile_band
+                            
+                            # Update band data with non-zero values
+                            mask = tile_data != 0  # For int8, 0 is the nodata value
+                            band_data[row_off:row_off+row_size, col_off:col_off+col_size][mask] = tile_data[mask]
+                    
+                    # Write band
+                    dst.write(band_data, band_idx)
+        
+        else:  # output_repr_format == 'npy'
+            # Process all tiles directly into memory array
+            for info in tqdm(tiff_info_list, desc="Processing tiles"):
+                with rasterio.open(info['path']) as src:
+                    # Read all bands at once
+                    tile_data = src.read()  # Shape: (bands, height, width)
+                    
+                    # Get tile bounds
+                    tile_bounds = src.bounds
+                    
+                    # Calculate window in output raster
+                    col_off = int((tile_bounds.left - west) / resolution_x)
+                    row_off = int((north - tile_bounds.top) / resolution_y)
+                    col_size = int((tile_bounds.right - tile_bounds.left) / resolution_x)
+                    row_size = int((tile_bounds.top - tile_bounds.bottom) / resolution_y)
+                    
+                    # Clip to output bounds
+                    if col_off < 0:
+                        col_size += col_off
+                        col_off = 0
+                    if row_off < 0:
+                        row_size += row_off
+                        row_off = 0
+                    if col_off + col_size > width:
+                        col_size = width - col_off
+                    if row_off + row_size > height:
+                        row_size = height - row_off
+                    
+                    if col_size <= 0 or row_size <= 0:
+                        continue
+                    
+                    # Process each band
+                    for band_idx in range(num_bands):
+                        tile_band = tile_data[band_idx]
+                        
+                        # Resample if needed
+                        if (tile_band.shape[0] != row_size or tile_band.shape[1] != col_size):
+                            temp_data = np.zeros((row_size, col_size), dtype=np.int8)
+                            
                             win_west = west + col_off * resolution_x
                             win_north = north - row_off * resolution_y
                             win_transform = from_bounds(
@@ -476,16 +597,81 @@ def merge_multiband_optimized(tiff_info_list, resolution, output_path, target_cr
                                 resampling=Resampling.nearest
                             )
                             
-                            tile_data = temp_data
-                        else:
-                            tile_data = tile_band
+                            tile_band = temp_data
                         
-                        # Update band data with non-zero values
-                        mask = tile_data > 0
-                        band_data[row_off:row_off+row_size, col_off:col_off+col_size][mask] = tile_data[mask]
+                        # Update merged data
+                        mask = tile_band != 0
+                        merged_data[row_off:row_off+row_size, col_off:col_off+col_size, band_idx][mask] = tile_band[mask]
+            
+            # Save NPY file
+            np.save(output_path, merged_data)
+        
+        # Process scales if present
+        if has_scales:
+            print("\nMerging scales data...")
+            for info in tqdm(tiff_info_list, desc="Processing scales"):
+                if not info['has_scales'] or not info['scales_path']:
+                    continue
                 
-                # Write band
-                dst.write(band_data, band_idx)
+                # Load scales data
+                tile_scales = np.load(info['scales_path'])
+                
+                with rasterio.open(info['path']) as src:
+                    # Get tile bounds
+                    tile_bounds = src.bounds
+                    
+                    # Calculate window in output raster
+                    col_off = int((tile_bounds.left - west) / resolution_x)
+                    row_off = int((north - tile_bounds.top) / resolution_y)
+                    col_size = int((tile_bounds.right - tile_bounds.left) / resolution_x)
+                    row_size = int((tile_bounds.top - tile_bounds.bottom) / resolution_y)
+                    
+                    # Clip to output bounds
+                    if col_off < 0:
+                        col_size += col_off
+                        col_off = 0
+                    if row_off < 0:
+                        row_size += row_off
+                        row_off = 0
+                    if col_off + col_size > width:
+                        col_size = width - col_off
+                    if row_off + row_size > height:
+                        row_size = height - row_off
+                    
+                    if col_size <= 0 or row_size <= 0:
+                        continue
+                    
+                    # Resample scales to fit window if needed
+                    if (tile_scales.shape[0] != row_size or tile_scales.shape[1] != col_size):
+                        temp_scales = np.zeros((row_size, col_size), dtype=tile_scales.dtype)
+                        
+                        win_west = west + col_off * resolution_x
+                        win_north = north - row_off * resolution_y
+                        win_transform = from_bounds(
+                            win_west, win_north - row_size * resolution_y,
+                            win_west + col_size * resolution_x, win_north,
+                            col_size, row_size
+                        )
+                        
+                        reproject(
+                            source=tile_scales,
+                            destination=temp_scales,
+                            src_transform=src.transform,
+                            src_crs=src.crs,
+                            dst_transform=win_transform,
+                            dst_crs=target_crs,
+                            resampling=Resampling.nearest
+                        )
+                        
+                        tile_scales = temp_scales
+                    
+                    # Update merged scales
+                    mask = tile_scales != 0
+                    merged_scales[row_off:row_off+row_size, col_off:col_off+col_size][mask] = tile_scales[mask]
+            
+            # Save merged scales
+            np.save(scales_output_path, merged_scales)
+            print(f"Scales data saved to: {scales_output_path}")
         
         return True
         
@@ -512,7 +698,8 @@ def get_crs_name(crs_string):
     else:
         return crs_string.replace(':', '_').lower()
 
-def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateline_tiles=True, force_projected=True, output_dir=None):
+def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateline_tiles=True, 
+         force_projected=True, output_dir=None, output_repr_format='tiff'):
     """
     Main processing function
     
@@ -523,6 +710,7 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         filter_cross_dateline_tiles: If True, filter out tiles on minority side of dateline crossing
         force_projected: If True, always use a projected CRS (like UTM) instead of WGS84
         output_dir: Output directory for results (default=base_dir)
+        output_repr_format: Output format for representation ('tiff' or 'npy', default='tiff')
     """
     # Set paths
     if base_dir is None:
@@ -534,8 +722,6 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
     
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
-    tiff_dir = "/scratch/zf281/global_map_0.1_degree_tiff"
     
     # Extract location name from base_dir for output naming
     location_name = Path(base_dir).parts[-2]  # e.g., "senegal" from the path
@@ -553,10 +739,10 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
             print("No grid folders found!")
             return
         
-        # Determine best projection based on TIFF files
+        # Determine best projection based on TIFF files in grid folders
         sample_tiff_paths = []
         for folder in grid_folders[:100]:  # Sample first 100
-            tiff_path = os.path.join(tiff_dir, f"{folder.name}.tiff")
+            tiff_path = os.path.join(folder, f"{folder.name}.tiff")
             if os.path.exists(tiff_path):
                 sample_tiff_paths.append(tiff_path)
         
@@ -579,7 +765,7 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             future_to_grid = {
-                executor.submit(create_multiband_tiff, str(folder), tiff_dir, temp_dir, 
+                executor.submit(create_multiband_data, str(folder), temp_dir, 
                               downsample_factor=downsample_factor, target_crs=target_crs, 
                               rgb_only=rgb_only): folder 
                 for folder in grid_folders
@@ -627,38 +813,62 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         crosses_dateline, _, _ = analyze_dateline_crossing(all_bounds_wgs84)
         filter_suffix = "_filtered" if (filter_cross_dateline_tiles and crosses_dateline) else ""
         
-        output_tiff = os.path.join(output_dir, f"{location_name}_map_{resolution}m_{crs_name}_{bands_suffix}{filter_suffix}.tiff")
+        # Determine output extension
+        output_ext = '.tiff' if output_repr_format == 'tiff' else '.npy'
+        output_path = os.path.join(output_dir, f"{location_name}_map_{resolution}m_{crs_name}_{bands_suffix}{filter_suffix}{output_ext}")
+        scales_output_path = os.path.join(output_dir, f"{location_name}_map_{resolution}m_{crs_name}_scales{filter_suffix}.npy")
         
         # Use optimized merge
-        success = merge_multiband_optimized(tiff_info, resolution, output_tiff, target_crs,
-                                          rgb_only=rgb_only, filter_cross_dateline_tiles=filter_cross_dateline_tiles)
+        success = merge_multiband_optimized(tiff_info, resolution, output_path, scales_output_path, target_crs,
+                                          rgb_only=rgb_only, filter_cross_dateline_tiles=filter_cross_dateline_tiles,
+                                          output_repr_format=output_repr_format)
         
         if not success:
             print("Failed to create mosaic")
             return
         
-        print(f"Multi-band GeoTIFF saved to: {output_tiff}")
+        print(f"Multi-band {output_repr_format.upper()} saved to: {output_path}")
         
         # Step 3: Create RGB visualization
         print("\nStep 3: Creating RGB visualization...")
         
-        # Read only first 3 bands for visualization
-        with rasterio.open(output_tiff) as src:
-            rgb_array = np.zeros((src.height, src.width, 3), dtype=np.uint8)
+        # Read data for visualization
+        if output_repr_format == 'tiff':
+            with rasterio.open(output_path) as src:
+                rgb_array = np.zeros((src.height, src.width, 3), dtype=np.uint8)
+                for i in range(min(3, num_bands)):
+                    band_data = src.read(i + 1)
+                    # Convert from int8 to uint8 for visualization
+                    rgb_array[:, :, i] = ((band_data.astype(np.float32) + 127.0) * (255.0 / 254.0)).astype(np.uint8)
+                
+                # Get transform and metadata
+                transform = src.transform
+                width = src.width
+                height = src.height
+                crs = src.crs
+        else:  # npy format
+            data = np.load(output_path, mmap_mode='r')
+            height, width, _ = data.shape
+            rgb_array = np.zeros((height, width, 3), dtype=np.uint8)
             for i in range(min(3, num_bands)):
-                rgb_array[:, :, i] = src.read(i + 1)
+                # Convert from int8 to uint8 for visualization
+                rgb_array[:, :, i] = ((data[:, :, i].astype(np.float32) + 127.0) * (255.0 / 254.0)).astype(np.uint8)
             
-            # Get transform and metadata
-            transform = src.transform
-            width = src.width
-            height = src.height
-            crs = src.crs
+            # Calculate transform from known information
+            # This is approximate since we don't have the exact georeferencing from NPY
+            # You might want to save georeferencing info separately
+            west = -180  # Default values, you should calculate these properly
+            north = 90
+            east = 180
+            south = -90
+            crs = target_crs
         
         # Calculate extent based on CRS type
-        west = transform.c
-        north = transform.f
-        east = west + transform.a * width
-        south = north + transform.e * height
+        if output_repr_format == 'tiff':
+            west = transform.c
+            north = transform.f
+            east = west + transform.a * width
+            south = north + transform.e * height
         
         # Create figure
         fig, ax = plt.subplots(figsize=(20, 15))
@@ -699,12 +909,13 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         print(f"  - Number of bands: {num_bands}")
         print(f"  - Resolution: {resolution}m")
         print(f"  - CRS: {target_crs}")
+        print(f"  - Output format: {output_repr_format}")
         
-        if target_crs == 'EPSG:4326':
+        if output_repr_format == 'tiff' and target_crs == 'EPSG:4326':
             print(f"  - Geographic bounds: {west:.6f}°, {south:.6f}°, {east:.6f}°, {north:.6f}°")
             print(f"  - Longitude span: {east - west:.2f}°")
             print(f"  - Latitude span: {north - south:.2f}°")
-        else:
+        elif output_repr_format == 'tiff':
             print(f"  - Projected bounds: {west:.2f}m, {south:.2f}m, {east:.2f}m, {north:.2f}m")
             print(f"  - Width: {(east - west)/1000:.2f} km")
             print(f"  - Height: {(north - south)/1000:.2f} km")
@@ -719,6 +930,16 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         coverage = np.sum(np.any(rgb_array > 0, axis=2)) / (height * width) * 100
         print(f"  - Coverage: {coverage:.2f}%")
         
+        # Check if scales were processed
+        if os.path.exists(scales_output_path):
+            scales_data = np.load(scales_output_path, mmap_mode='r')
+            print(f"\nScales statistics:")
+            print(f"  - Shape: {scales_data.shape}")
+            print(f"  - Dtype: {scales_data.dtype}")
+            print(f"  - Min: {np.min(scales_data)}")
+            print(f"  - Max: {np.max(scales_data)}")
+            print(f"  - Mean: {np.mean(scales_data):.6f}")
+        
         plt.show()
         
     finally:
@@ -732,7 +953,8 @@ if __name__ == "__main__":
         base_dir="/maps/zf281/btfm4rs/data/tmp/2021", 
         output_dir="/maps/zf281/btfm4rs/data/tmp/",
         downsample_factor=1, # 1 means no downsampling (10m resolution)
-        rgb_only=True, # For quick testing, set to True to only use RGB bands
+        rgb_only=True, # For quick testing, set to True to only use RGB bands. If False, it will use all 128 bands.
         filter_cross_dateline_tiles=True,  # This will filter out those tiles which cross the dateline
         force_projected=True,  # This ensures we use UTM instead of WGS84
+        output_repr_format='tiff',  # Can be 'tiff' or 'npy'
     )

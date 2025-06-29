@@ -275,10 +275,10 @@ def main():
     # ========== 配置参数 ==========
     # 输入路径
     tiff_dir = "/scratch/zf281/global_map_0.1_degree_tiff"  # TIFF文件目录
-    boundary_path = "/maps/zf281/btfm4rs/david_cci_workshop_and_maddy_roi/SP.shp"  # 修改为您的SHP文件路径
+    boundary_path = "/maps/zf281/btfm4rs/david_cci_workshop_and_maddy_roi/amazon_sensulatissimo_gmm_v1.shp"  # 修改为您的SHP文件路径
     
     # 输出文件
-    region_name = "cci_sao_paulo"  # 可以修改为具体地区名称，如"中国"、"美国"等
+    region_name = "amazon"  # 可以修改为具体地区名称，如"中国"、"美国"等
     output_txt = f"{region_name.lower()}_tiff_files.txt"
     output_plot = f"{region_name.lower()}_tiff_coverage.png"
     rsync_script = f"transfer_{region_name.lower()}_tiffs.sh"

@@ -167,58 +167,58 @@
 # print(f"保存为: {save_name}")
 # plt.close()
 
-# import numpy as np
-# file_path = "/scratch/zf281/btfm_representation/uk/2024/grid_-3.95_52.25/grid_-3.95_52.25.npy"
-# band = np.load(file_path, mmap_mode='r')
-# print(band.shape)
+import numpy as np
+file_path = "/maps/zf281/btfm4rs/data/tmp/tmp_map_10m_utm28n_rgb.npy"
+band = np.load(file_path, mmap_mode='r')
+print(band.shape)
 # # 打印最大最小值
 # print(f"最大值: {band.max()}")
 # print(f"最小值: {band.min()}")
 
-import rasterio
-import numpy as np
-import matplotlib.pyplot as plt
+# import rasterio
+# import numpy as np
+# import matplotlib.pyplot as plt
 
-def visualize_tiff(tiff_path):
-    """
-    读取TIFF文件的前三个波段，将其值从[-127, 127]转换为[0, 255]并进行可视化。
+# def visualize_tiff(tiff_path):
+#     """
+#     读取TIFF文件的前三个波段，将其值从[-127, 127]转换为[0, 255]并进行可视化。
 
-    参数:
-    tiff_path (str): TIFF文件的路径。
-    """
-    try:
-        with rasterio.open(tiff_path) as src:
-            # 读取前三个波段
-            # rasterio读取的波段索引从1开始
-            img_data = src.read([1, 2, 3])
+#     参数:
+#     tiff_path (str): TIFF文件的路径。
+#     """
+#     try:
+#         with rasterio.open(tiff_path) as src:
+#             # 读取前三个波段
+#             # rasterio读取的波段索引从1开始
+#             img_data = src.read([1, 2, 3])
 
-            # 将数据从int8 (范围-127到127) 转换为 uint8 (范围0-255)
-            # 首先将数据类型转换为int16以避免溢出，然后加上127
-            img_data_scaled = (img_data.astype(np.int16) + 127).astype(np.uint8)
+#             # 将数据从int8 (范围-127到127) 转换为 uint8 (范围0-255)
+#             # 首先将数据类型转换为int16以避免溢出，然后加上127
+#             img_data_scaled = (img_data.astype(np.int16) + 127).astype(np.uint8)
 
-            # rasterio读取的数组形状为 (通道, 高度, 宽度)
-            # matplotlib.pyplot.imshow 需要的形状为 (高度, 宽度, 通道)
-            # 因此需要转换数组的维度
-            img_to_show = np.transpose(img_data_scaled, (1, 2, 0))
+#             # rasterio读取的数组形状为 (通道, 高度, 宽度)
+#             # matplotlib.pyplot.imshow 需要的形状为 (高度, 宽度, 通道)
+#             # 因此需要转换数组的维度
+#             img_to_show = np.transpose(img_data_scaled, (1, 2, 0))
 
-            # 使用matplotlib显示图像
-            plt.figure(figsize=(10, 10))
-            plt.imshow(img_to_show)
-            # plt.title('TIFF Image - First three bands')
-            # plt.xlabel('Width')
-            # plt.ylabel('Height')
-            # plt.show()
-            plt.imsave('visualized_image.png', img_to_show)
-            print("图像已保存为 'visualized_image.png'")
-            plt.close()
+#             # 使用matplotlib显示图像
+#             plt.figure(figsize=(10, 10))
+#             plt.imshow(img_to_show)
+#             # plt.title('TIFF Image - First three bands')
+#             # plt.xlabel('Width')
+#             # plt.ylabel('Height')
+#             # plt.show()
+#             plt.imsave('visualized_image.png', img_to_show)
+#             print("图像已保存为 'visualized_image.png'")
+#             plt.close()
 
-    except Exception as e:
-        print(f"发生错误: {e}")
+#     except Exception as e:
+#         print(f"发生错误: {e}")
 
-if __name__ == '__main__':
-    # 请将这个路径替换为您TIFF文件的实际路径
-    tiff_file_path = '/maps/zf281/btfm4rs/senegal_map_10m_wgs84_128bands.tiff'
-    visualize_tiff(tiff_file_path)
+# if __name__ == '__main__':
+#     # 请将这个路径替换为您TIFF文件的实际路径
+#     tiff_file_path = '/maps/zf281/btfm4rs/senegal_map_10m_wgs84_128bands.tiff'
+#     visualize_tiff(tiff_file_path)
     
 # import asf_search as asf
 
