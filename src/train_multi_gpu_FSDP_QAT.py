@@ -53,6 +53,14 @@ from torch.distributed.fsdp.api import FullOptimStateDictConfig
 import wandb
 import matplotlib.pyplot as plt
 
+# Import fvcore for FLOPs counting
+try:
+    from fvcore.nn import FlopCountAnalysis
+except ImportError:
+    print("Warning: fvcore not installed. FLOPs counting will be disabled.")
+    print("Install with: pip install fvcore")
+    FlopCountAnalysis = None
+
 # ============== 自定义模块 / 函数 ===============
 from models.modules import TransformerEncoder, ProjectionHead 
 from models.quantization import FakeQuantizeRepresentation #, quantize_tensor_symmetric, dequantize_tensor_symmetric # These two are not directly used in train script
@@ -285,6 +293,39 @@ def load_checkpoint_for_resume(checkpoint_path, model, optimizer, scaler, device
         logging.info(f"Resumed from epoch {resume_epoch}, step {resume_step}")
     
     return resume_epoch, resume_step, resume_config
+
+# Helper function to compute FLOPs for a single forward pass
+def compute_flops_single_pass(model, inputs, device):
+    """Compute FLOPs for a single forward pass"""
+    if FlopCountAnalysis is None:
+        return 0
+    
+    try:
+        # Create a wrapper model that only does forward pass
+        class ForwardOnlyWrapper(torch.nn.Module):
+            def __init__(self, model):
+                super().__init__()
+                self.model = model
+            
+            def forward(self, s2, s1):
+                # Just forward pass, no loss computation
+                return self.model(s2, s1)
+        
+        # Use the wrapped model for FLOP counting
+        forward_model = ForwardOnlyWrapper(model)
+        flops = FlopCountAnalysis(forward_model, inputs)
+        return flops.total()
+    except Exception as e:
+        if hasattr(model, 'module'):
+            # Try with unwrapped model
+            try:
+                forward_model = ForwardOnlyWrapper(model.module)
+                flops = FlopCountAnalysis(forward_model, inputs)
+                return flops.total()
+            except:
+                pass
+        logging.warning(f"Failed to compute FLOPs: {e}")
+        return 0
 
 best_val_acc = 0.0
 
@@ -522,6 +563,13 @@ def main():
     global best_val_acc 
     best_val_acc = 0.0 
 
+    # Initialize FLOPs tracking variables
+    total_flops_accumulated = 0  # Total FLOPs since start
+    last_log_flops = 0  # FLOPs at last log
+    flops_since_last_log = 0  # Local accumulator for this rank
+    flops_computed_once = False  # Flag to compute FLOPs only once per model config
+    single_forward_flops = 0  # FLOPs for a single forward pass
+
     if global_rank == 0: os.makedirs(os.path.join("checkpoints", "ssl"), exist_ok=True)
     dist.barrier() 
 
@@ -621,6 +669,23 @@ def main():
                 s1_aug1 = batch_data['s1_aug1'].to(device, non_blocking=True)
                 s1_aug2 = batch_data['s1_aug2'].to(device, non_blocking=True)
                 
+                # Compute FLOPs for a single forward pass (only once)
+                if not flops_computed_once and FlopCountAnalysis is not None:
+                    try:
+                        # Try to compute FLOPs for a single forward pass
+                        # We'll use the first batch as a representative sample
+                        with torch.no_grad():
+                            single_forward_flops = compute_flops_single_pass(
+                                model, (s2_aug1, s1_aug1), device
+                            )
+                        flops_computed_once = True
+                        if global_rank == 0 and single_forward_flops > 0:
+                            logging.info(f"Computed FLOPs for single forward pass: {single_forward_flops:,}")
+                    except Exception as e:
+                        if global_rank == 0:
+                            logging.warning(f"Could not compute FLOPs: {e}")
+                        flops_computed_once = True  # Don't try again
+                
                 # 调整学习率
                 if is_resume:
                     current_lr_val = adjust_single_group_lr(
@@ -661,6 +726,10 @@ def main():
                     proj_feats2, repr2_f32 = model(s2_aug2, s1_aug2)
                     loss_main, bar_main, off_main = criterion(proj_feats1, proj_feats2)
                     
+                    # Count FLOPs for the two forward passes (main)
+                    if single_forward_flops > 0:
+                        flops_since_last_log += 2 * single_forward_flops  # Two forward passes
+                    
                     loss_mix = torch.tensor(0.0, device=device) 
                     if config.get('apply_mixup', False):
                         B = s2_aug1.size(0); idxs = torch.randperm(B, device=device)
@@ -678,6 +747,11 @@ def main():
                             y_m_s2, y_m_s1 = y_m_s2.half(), y_m_s1.half()
 
                         z_m, _ = model(y_m_s2, y_m_s1)
+                        
+                        # Count FLOPs for mixup forward pass
+                        if single_forward_flops > 0:
+                            flops_since_last_log += single_forward_flops  # One more forward pass for mixup
+                        
                         z2_perm = torch.gather(proj_feats2, 0, idxs.unsqueeze(1).expand(-1, proj_feats2.size(1)))
                         
                         cc_m_a = compute_cross_correlation(z_m, proj_feats1)
@@ -720,6 +794,21 @@ def main():
                     last_log_time = current_time_log
                     last_log_examples = examples_processed_total
 
+                    # Gather FLOPs from all ranks
+                    flops_tensor = torch.tensor([flops_since_last_log], dtype=torch.float64, device=device)
+                    dist.all_reduce(flops_tensor, op=dist.ReduceOp.SUM)
+                    global_flops_since_last_log = flops_tensor.item()
+                    
+                    # Update total accumulated FLOPs
+                    total_flops_accumulated += global_flops_since_last_log
+                    
+                    # Calculate TFLOPs (1e12 FLOPs)
+                    tflops_since_last_log = global_flops_since_last_log / 1e12
+                    total_tflops_accumulated = total_flops_accumulated / 1e12
+                    
+                    # Reset local FLOPs counter
+                    flops_since_last_log = 0
+
                     erank_z, erank_repr = 0.0, 0.0 
                     try:
                         if proj_feats1 is not None: erank_z = rankme(proj_feats1.detach()).item()
@@ -731,7 +820,8 @@ def main():
                         f"[Epoch={epoch}/{config['epochs']-1}, Step={g_step}/{total_steps_approx}] "
                         f"Loss={loss_main.item():.3f} (Mix:{loss_mix.item() if isinstance(loss_mix, torch.Tensor) else loss_mix:.3f}, AvgRoll:{avg_rolling_loss:.3f}) "
                         f"LR={current_lr_val:.5f}, GLB_Batch={current_batch_size_effective}, Ex/s={exps_sec:.1f} "
-                        f"Rank(z_proj)={erank_z:.3f}, Rank(repr_f32)={erank_repr:.3f}"
+                        f"Rank(z_proj)={erank_z:.3f}, Rank(repr_f32)={erank_repr:.3f} "
+                        f"TFLOPs_interval={tflops_since_last_log:.3f}, TFLOPs_total={total_tflops_accumulated:.3f}"
                     )
                     if wandb_run:
                         wandb_log_dict = {
@@ -740,10 +830,19 @@ def main():
                             "total_loss": total_loss.item(), "avg_rolling_loss": avg_rolling_loss,
                             "learning_rate": current_lr_val, "examples_per_second_global": exps_sec,
                             "rank_z_projection": erank_z, "rank_fused_representation_f32": erank_repr,
-                            "grad_scaler_scale": scaler.get_scale() if apply_amp else -1.0 # Log scaler state
+                            "grad_scaler_scale": scaler.get_scale() if apply_amp else -1.0, # Log scaler state
+                            "tflops_since_last_log": tflops_since_last_log,
+                            "tflops_accumulated": total_tflops_accumulated,
                         }
                         # 修复：使用global step作为wandb的step参数
                         wandb.log(wandb_log_dict, step=g_step) 
+                elif g_step % config['log_interval_steps'] != 0:
+                    # For non-rank0 or non-log steps, just reset the local counter after all_reduce
+                    if g_step % config['log_interval_steps'] == 0:
+                        # All ranks participate in all_reduce
+                        flops_tensor = torch.tensor([flops_since_last_log], dtype=torch.float64, device=device)
+                        dist.all_reduce(flops_tensor, op=dist.ReduceOp.SUM)
+                        flops_since_last_log = 0
 
                 if config.get('val_interval_steps',0) > 0 and g_step > 0 and g_step % config['val_interval_steps'] == 0:
                     torch.cuda.empty_cache(); gc.collect()
