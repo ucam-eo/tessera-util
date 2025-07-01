@@ -493,9 +493,9 @@ Example usage:
     
     /maps/zf281/miniconda3/envs/detectree-env/bin/python \
     /maps/zf281/btfm4rs/src/utils/fetch_representations_from_shp.py \
-    /maps/zf281/btfm4rs/david_cci_workshop_and_maddy_roi/centralsenegal_jcam_bbox.shp \
-    -y 2021 \
-    -o /maps/zf281/btfm4rs/data/tmp
+    /maps/zf281/btfm4rs/david_cci_workshop_and_maddy_roi/borneo.shp \
+    -y 2020 \
+    -o /scratch/zf281/btfm_representation/borneo
     """
     )
     

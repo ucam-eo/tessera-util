@@ -950,11 +950,11 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
 if __name__ == "__main__":
     # The code will automatically determine the best projection
     main(
-        base_dir="/maps/zf281/btfm4rs/data/tmp/2021", 
-        output_dir="/maps/zf281/btfm4rs/data/tmp/",
+        base_dir="/scratch/zf281/btfm_representation/borneo/2020", 
+        output_dir="/scratch/zf281/btfm_representation/borneo",
         downsample_factor=1, # 1 means no downsampling (10m resolution)
-        rgb_only=True, # For quick testing, set to True to only use RGB bands. If False, it will use all 128 bands.
+        rgb_only=False, # For quick testing, set to True to only use RGB bands. If False, it will use all 128 bands.
         filter_cross_dateline_tiles=True,  # This will filter out those tiles which cross the dateline
         force_projected=True,  # This ensures we use UTM instead of WGS84
-        output_repr_format='tiff',  # Can be 'tiff' or 'npy'
+        output_repr_format='tiff',  # Can be 'tiff' or 'npy'. Usually 'npy' mode is much faster...
     )

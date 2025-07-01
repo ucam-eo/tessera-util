@@ -168,12 +168,12 @@
 # plt.close()
 
 import numpy as np
-file_path = "/maps/zf281/btfm4rs/data/tmp/tmp_map_10m_utm28n_rgb.npy"
+file_path = "/scratch/zf281/btfm_representation/senegal/representation/2018_representation_map_10m_utm28n_scales.npy"
 band = np.load(file_path, mmap_mode='r')
 print(band.shape)
 # # 打印最大最小值
-# print(f"最大值: {band.max()}")
-# print(f"最小值: {band.min()}")
+print(f"最大值: {band.max()}")
+print(f"最小值: {band.min()}")
 
 # import rasterio
 # import numpy as np
