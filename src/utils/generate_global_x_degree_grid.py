@@ -18,48 +18,48 @@ import time
 
 def load_countries_shapefile(shapefile_path, exclude_antarctica=True, buffer_distance=3000):
     """
-    加载国家边界shapefile，根据需要过滤掉南极洲，并添加3公里缓冲区
+    Load the country boundary shapefile, optionally exclude Antarctica, and add a 3 km buffer.
     """
     countries = gpd.read_file(shapefile_path)
     
-    # 过滤出大陆区域(排除南极洲)
+    # Filter out continental regions (exclude Antarctica)
     if exclude_antarctica:
         # countries = countries[countries['SOVEREIGNT'] != 'Antarctica']
         countries = countries[countries['NAME'] != 'Antarctica']
     
-    # 添加缓冲区 - 先转换到投影坐标系统进行缓冲
-    # 使用Web Mercator (EPSG:3857) 进行缓冲操作
+    # Add buffer - first convert to projected coordinate system for buffering
+    # Use Web Mercator (EPSG:3857) for buffering
     countries_proj = countries.to_crs("EPSG:3857")
     countries_buffered = countries_proj.buffer(buffer_distance)
     
-    # 创建包含缓冲区的新GeoDataFrame
+    # Create a new GeoDataFrame with the buffer
     countries_with_buffer = gpd.GeoDataFrame(
         countries.drop(columns='geometry'), 
         geometry=countries_buffered,
         crs="EPSG:3857"
     )
     
-    # 转回WGS84 (EPSG:4326)
+    # Convert back to WGS84 (EPSG:4326)
     countries_with_buffer = countries_with_buffer.to_crs("EPSG:4326")
     
-    print(f"已添加 {buffer_distance}米 缓冲区至国家边界")
+    print(f"Added {buffer_distance} meters buffer to country boundaries")
     
     return countries_with_buffer
 
 def generate_global_grid(grid_size=2.0, x_min=-180, x_max=180, y_min=-90, y_max=90):
     """
-    生成指定大小的全球网格(以度为单位)
+    Generate a global grid of specified size (in degrees).
     """
-    # 创建网格单元
+    # Create grid cells
     grid_cells = []
     
     for x in np.arange(x_min, x_max, grid_size):
         for y in np.arange(y_min, y_max, grid_size):
-            # 计算中心坐标
+            # Calculate center coordinates
             center_lon = x + grid_size/2
             center_lat = y + grid_size/2
             
-            # 为网格单元创建一个矩形框
+            # Create a rectangular box for the grid cell
             cell = box(x, y, x + grid_size, y + grid_size)
             grid_cells.append({
                 'geometry': cell,
@@ -71,36 +71,36 @@ def generate_global_grid(grid_size=2.0, x_min=-180, x_max=180, y_min=-90, y_max=
                 'center_lat': center_lat
             })
     
-    # 从网格单元创建GeoDataFrame
+    # Create GeoDataFrame from grid cells
     grid = gpd.GeoDataFrame(grid_cells, crs="EPSG:4326")
     return grid
 
 def get_utm_zone(longitude, latitude):
     """
-    获取给定经纬度的UTM区域
+    Get the UTM zone for the given longitude and latitude.
     """
-    # 计算UTM区域编号
+    # Calculate UTM zone number
     if longitude >= 180:
         longitude = longitude - 360
     
     zone_number = int((longitude + 180) / 6) + 1
     
-    # 确定是北半球还是南半球
+    # Determine whether it's in the northern or southern hemisphere
     if latitude >= 0:
-        # 北半球
+        # Northern hemisphere
         epsg = 32600 + zone_number
     else:
-        # 南半球
+        # Southern hemisphere
         epsg = 32700 + zone_number
     
     return f"EPSG:{epsg}"
 
 def create_grid_raster(grid_cell, countries, output_path, resolution=1000):
     """
-    为网格单元创建栅格，其中与陆地相交的区域=1，其他区域=0。
-    使用自定义分辨率，默认为1000米，所有TIFF具有相同尺寸。
+    Create a raster for the grid cell, where areas intersecting with land = 1, other areas = 0.
+    Use custom resolution, default is 1000 meters, all TIFFs have the same dimensions.
     """
-    # 提取网格单元属性
+    # Extract grid cell attributes
     lon_min = grid_cell['lon_min']
     lon_max = grid_cell['lon_max']
     lat_min = grid_cell['lat_min']
@@ -108,44 +108,44 @@ def create_grid_raster(grid_cell, countries, output_path, resolution=1000):
     center_lon = grid_cell['center_lon']
     center_lat = grid_cell['center_lat']
     
-    # 根据网格中心坐标创建输出文件名
+    # Create output filename based on grid center coordinates
     filename = f"grid_{center_lon:.2f}_{center_lat:.2f}.tiff"
     output_file = os.path.join(output_path, filename)
     
-    # 如果文件已存在，则跳过
+    # Skip if file already exists
     if os.path.exists(output_file):
         return output_file
     
-    # 获取适当的UTM投影
+    # Get appropriate UTM projection
     utm_epsg = get_utm_zone(center_lon, center_lat)
     
-    # 为此网格单元创建GeoDataFrame
+    # Create GeoDataFrame for this grid cell
     grid_gdf = gpd.GeoDataFrame([{
         'geometry': box(lon_min, lat_min, lon_max, lat_max),
     }], crs="EPSG:4326")
     
-    # 将国家边界裁剪到此网格单元的范围
+    # Clip country boundaries to the extent of this grid cell
     grid_geom = grid_gdf.geometry.iloc[0]
     countries_in_grid = countries[countries.intersects(grid_geom)]
     
-    # 投影到UTM
+    # Project to UTM
     grid_utm = grid_gdf.to_crs(utm_epsg)
     
-    # 计算UTM中的网格边界
+    # Calculate grid boundaries in UTM
     bounds_utm = grid_utm.total_bounds
     xmin, ymin, xmax, ymax = bounds_utm
     
-    # 计算宽度和高度，使用自定义分辨率
+    # Calculate width and height using custom resolution
     width = int(round((xmax - xmin) / resolution))
     height = int(round((ymax - ymin) / resolution))
     
-    # 打印实际网格和分辨率信息
-    print(f"网格 {filename}: 分辨率={resolution}m, 尺寸={width}x{height}像素")
+    # Print actual grid and resolution information
+    print(f"Grid {filename}: Resolution={resolution}m, Size={width}x{height} pixels")
     
-    # 创建变换矩阵
+    # Create transformation matrix
     transform = from_origin(xmin, ymax, resolution, resolution)
     
-    # 如果此网格单元中有陆地，栅格化陆地区域
+    # Rasterize land areas if there is land in this grid cell
     if len(countries_in_grid) > 0:
         countries_utm = countries_in_grid.to_crs(utm_epsg)
         shapes = [(geom, 1) for geom in countries_utm.geometry]
@@ -154,14 +154,14 @@ def create_grid_raster(grid_cell, countries, output_path, resolution=1000):
             out_shape=(height, width),
             transform=transform,
             fill=0,
-            all_touched=True,  # 确保所有相交的像素都被包括
+            all_touched=True,  # Ensure all intersecting pixels are included
             dtype=np.uint8
         )
     else:
-        # 如果没有陆地，创建全0数组
+        # Create an all-zero array if there is no land
         raster = np.zeros((height, width), dtype=np.uint8)
     
-    # 写入压缩的GeoTIFF
+    # Write compressed GeoTIFF
     with rasterio.open(
         output_file,
         'w',
@@ -172,46 +172,46 @@ def create_grid_raster(grid_cell, countries, output_path, resolution=1000):
         dtype=np.uint8,
         crs=utm_epsg,
         transform=transform,
-        compress='lzw',      # 使用LZW压缩
-        predictor=2,         # 水平差分预测器，提高压缩率
-        tiled=True,          # 使用分块存储
-        blockxsize=256,      # 优化块大小
+        compress='lzw',      # Use LZW compression
+        predictor=2,         # Horizontal differencing predictor for better compression
+        tiled=True,          # Use tiled storage
+        blockxsize=256,      # Optimize block size
         blockysize=256,
-        zlevel=9,            # 最高压缩级别
-        nodata=0             # 设置无数据值
+        zlevel=9,            # Maximum compression level
+        nodata=0             # Set no-data value
     ) as dst:
         dst.write(raster, 1)
     
     return output_file
 
 def process_grid_cell(grid_cell, countries, output_path, resolution=1000):
-    """处理单个网格单元的函数，用于并行处理"""
+    """Function to process a single grid cell, used for parallel processing."""
     return create_grid_raster(grid_cell, countries, output_path, resolution)
 
 def main():
-    # 定义路径
+    # Define paths
     shapefile_path = "/maps/zf281/btfm4rs/data/global_map_shp/detailed_world_map.shp"
     output_path = "/scratch/zf281/global_map_0.1_degree_tiff"
     
-    # 自定义分辨率设置 (单位：米)
-    # 可以根据需要修改此值
-    resolution = 10  # 默认1000米分辨率
+    # Custom resolution setting (unit: meters)
+    # Modify this value as needed
+    resolution = 10  # Default resolution is 1000 meters
     
-    # 如果输出目录不存在，则创建
+    # Create output directory if it doesn't exist
     os.makedirs(output_path, exist_ok=True)
     
-    # 加载国家边界shapefile并添加3公里缓冲区
-    print("加载国家边界shapefile并添加1公里缓冲区...")
+    # Load country boundary shapefile and add a 1 km buffer
+    print("Loading country boundary shapefile and adding a 1 km buffer...")
     countries = load_countries_shapefile(shapefile_path, buffer_distance=1000)
     
-    # 生成全球网格
-    print("生成全球网格...")
-    grid = generate_global_grid(grid_size=0.1)  # 0.1度网格大约是11公里
+    # Generate global grid
+    print("Generating global grid...")
+    grid = generate_global_grid(grid_size=0.1)  # 0.1-degree grid is approximately 11 km
     
-    # 筛选只包含与陆地相交的网格单元
-    print("筛选与陆地相交的网格单元...")
+    # Filter grid cells that intersect with land
+    print("Filtering grid cells that intersect with land...")
     land_grid = []
-    for _, grid_row in tqdm(grid.iterrows(), total=len(grid), desc="筛选网格"):
+    for _, grid_row in tqdm(grid.iterrows(), total=len(grid), desc="Filtering grid"):
         grid_geom = grid_row.geometry
         if countries.intersects(grid_geom).any():
             land_grid.append({
@@ -223,17 +223,17 @@ def main():
                 'center_lat': grid_row.center_lat
             })
     
-    print(f"找到 {len(land_grid)} 个与陆地相交的网格单元")
-    print(f"使用分辨率: {resolution}米")
+    print(f"Found {len(land_grid)} grid cells intersecting with land")
+    print(f"Using resolution: {resolution} meters")
     
-    # 使用多进程并行处理创建栅格
+    # Use multiprocessing for parallel processing
     num_cores = mp.cpu_count()
-    print(f"使用 {num_cores} 个CPU核心进行并行处理")
+    print(f"Using {num_cores} CPU cores for parallel processing")
     
-    # 为每个网格单元创建栅格
-    print("为网格单元创建栅格...")
+    # Create raster for each grid cell
+    print("Creating raster for grid cells...")
     
-    # 创建部分函数以传递固定参数
+    # Create partial function to pass fixed arguments
     process_func = partial(
         process_grid_cell, 
         countries=countries, 
@@ -241,12 +241,12 @@ def main():
         resolution=resolution
     )
     
-    # 使用进程池并行处理网格
+    # Use process pool for parallel grid processing
     with mp.Pool(processes=num_cores) as pool:
-        # 使用tqdm显示进度
-        list(tqdm(pool.imap(process_func, land_grid), total=len(land_grid), desc="创建网格TIFF"))
+        # Use tqdm to display progress
+        list(tqdm(pool.imap(process_func, land_grid), total=len(land_grid), desc="Creating grid TIFFs"))
     
-    print("完成!")
+    print("Done!")
 
 if __name__ == "__main__":
     main()

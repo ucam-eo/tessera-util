@@ -950,8 +950,8 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
 if __name__ == "__main__":
     # The code will automatically determine the best projection
     main(
-        base_dir="/scratch/zf281/btfm_representation/borneo/2020", 
-        output_dir="/scratch/zf281/btfm_representation/borneo",
+        base_dir="/scratch/zf281/btfm_representation/senegal/representation/2021", 
+        output_dir="/scratch/zf281/btfm_representation/senegal/representation",
         downsample_factor=1, # 1 means no downsampling (10m resolution)
         rgb_only=False, # For quick testing, set to True to only use RGB bands. If False, it will use all 128 bands.
         filter_cross_dateline_tiles=True,  # This will filter out those tiles which cross the dateline
