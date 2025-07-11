@@ -6,7 +6,7 @@ config = {
     # "data_root": "data/ssl_training/ready_to_use_64_steps",
     # "data_root": "data/ssl_training/ready_to_use_temp_small",
     "batch_size": 2048,
-    "epochs": 2,
+    "epochs": 1,
     "learning_rate": 0.002,
     "barlow_lambda": 5e-3,
     "fusion_method": "concat",  # 可选 'sum', 'concat', 'transformer'
@@ -36,8 +36,10 @@ config = {
                                         # 设置为 0 则从一开始就应用
 
     # 投影头维度
-    "projector_out_dim": 8192*2,
-    "projector_hidden_dim": 8192*2,
+    # "projector_out_dim": 8192*2,
+    # "projector_hidden_dim": 8192*2,
+    "projector_out_dim": 128,
+    "projector_hidden_dim": 128,
 
     "sample_size_s2": 40,
     "sample_size_s1": 40,

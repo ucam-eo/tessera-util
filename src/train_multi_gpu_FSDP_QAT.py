@@ -3,10 +3,10 @@
 
 # 运行方式:
 #   单节点:
-# torchrun --nproc_per_node=8 --master_addr=127.0.0.1 --master_port=29500 src/train_multi_gpu_FSDP.py --config configs/your_config_with_qat.py
+# torchrun --nproc_per_node=8 --master_addr=127.0.0.1 --master_port=29500 src/train_multi_gpu_FSDP.py --config configs/ssl_config.py
 #   多节点:
-#     节点1: torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 src/train_multi_gpu_FSDP.py --config configs/your_config_with_qat.py
-#     节点2: torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 src/train_multi_gpu_FSDP.py --config configs/your_config_with_qat.py
+#     节点1: torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 src/train_multi_gpu_FSDP.py --config configs/ssl_config.py
+#     节点2: torchrun --nnodes=2 --nproc_per_node=8 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=gpu-16:29400 src/train_multi_gpu_FSDP.py --config configs/ssl_config.py
 
 import os
 os.environ["OMP_NUM_THREADS"] = "1" 
