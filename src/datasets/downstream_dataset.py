@@ -49,13 +49,23 @@ class AustrianCrop(Dataset):
                  sample_size_s1=20):
         super().__init__()
         self.s2_bands_data = np.load(s2_bands_file_path)
+        # self.s2_bands_data = np.load(s2_bands_file_path, mmap_mode='r')  # 使用内存映射
         self.s2_masks_data = np.load(s2_masks_file_path)
         self.s2_doys_data  = np.load(s2_doy_file_path)
-
         self.s1_asc_bands_data = np.load(s1_asc_bands_file_path)
         self.s1_asc_doys_data  = np.load(s1_asc_doy_file_path)
         self.s1_desc_bands_data = np.load(s1_desc_bands_file_path)
         self.s1_desc_doys_data  = np.load(s1_desc_doy_file_path)
+        
+        # 测试float16
+        # self.s2_bands_data = np.load(s2_bands_file_path, mmap_mode='r').astype(np.float16)
+        # self.s2_masks_data = np.load(s2_masks_file_path)
+        # self.s2_doys_data  = np.load(s2_doy_file_path)
+        # self.s1_asc_bands_data = np.load(s1_asc_bands_file_path).astype(np.float16)
+        # self.s1_asc_doys_data  = np.load(s1_asc_doy_file_path)
+        # self.s1_desc_bands_data = np.load(s1_desc_bands_file_path).astype(np.float16)
+        # self.s1_desc_doys_data  = np.load(s1_desc_doy_file_path)
+        
         # 生成mask：全0判断是否有效
         self.s1_asc_masks_data = (self.s1_asc_bands_data.sum(axis=-1) != 0)
         self.s1_desc_masks_data = (self.s1_desc_bands_data.sum(axis=-1) != 0)
@@ -124,10 +134,14 @@ class AustrianCrop(Dataset):
         sub_doys  = s2_doys[sampled_idx]
         if self.standardize:
             sub_bands = (sub_bands - self.s2_band_mean) / (self.s2_band_std + 1e-9)
-        doys_norm = sub_doys / 365.0
-        sin_doy = np.sin(2*np.pi*doys_norm).reshape(-1,1)
-        cos_doy = np.cos(2*np.pi*doys_norm).reshape(-1,1)
-        result = np.hstack((sub_bands, sin_doy, cos_doy))
+        # doys_norm = sub_doys / 365.0
+        # sin_doy = np.sin(2*np.pi*doys_norm).reshape(-1,1)
+        # cos_doy = np.cos(2*np.pi*doys_norm).reshape(-1,1)
+        # result = np.hstack((sub_bands, sin_doy, cos_doy))
+        
+        # 直接把doy连接到band上
+        result = np.hstack((sub_bands, sub_doys.reshape(-1, 1)))
+        
         return torch.tensor(result, dtype=torch.float32)
 
     def _augment_s1(self, s1_asc_bands, s1_asc_doys, s1_desc_bands, s1_desc_doys):
@@ -144,10 +158,14 @@ class AustrianCrop(Dataset):
         sub_doys  = s1_doys_all[sampled_idx]
         if self.standardize:
             sub_bands = (sub_bands - self.s1_band_mean) / (self.s1_band_std + 1e-9)
-        doys_norm = sub_doys / 365.0
-        sin_doy = np.sin(2*np.pi*doys_norm).reshape(-1,1)
-        cos_doy = np.cos(2*np.pi*doys_norm).reshape(-1,1)
-        result = np.hstack((sub_bands, sin_doy, cos_doy))
+        # doys_norm = sub_doys / 365.0
+        # sin_doy = np.sin(2*np.pi*doys_norm).reshape(-1,1)
+        # cos_doy = np.cos(2*np.pi*doys_norm).reshape(-1,1)
+        # result = np.hstack((sub_bands, sin_doy, cos_doy))
+        
+        # 直接把doy连接到band上
+        result = np.hstack((sub_bands, sub_doys.reshape(-1, 1)))
+        
         return torch.tensor(result, dtype=torch.float32)
 
     def __getitem__(self, idx):
@@ -179,6 +197,216 @@ def austrian_crop_collate_fn(batch):
     s1_samples = torch.stack(s1_samples, dim=0)
     labels     = torch.tensor(labels, dtype=torch.long)
     return s2_samples, s1_samples, labels
+
+class AustrianCropInference_64_Fixed(Dataset):
+    """
+    Validation dataset for the 64 time steps model.
+    Processes the validation data to have fixed 64 time steps.
+    """
+    def __init__(self,
+                 s2_bands_file_path,
+                 s2_masks_file_path,
+                 s2_doy_file_path,
+                 s1_asc_bands_file_path,
+                 s1_asc_doy_file_path,
+                 s1_desc_bands_file_path,
+                 s1_desc_doy_file_path,
+                 labels_path,
+                 field_ids_path=None,
+                 train_fids=None,
+                 val_fids=None,
+                 test_fids=None,
+                 sample_size_s2=64,
+                 sample_size_s1=64,
+                 min_valid_timesteps=0,
+                 is_training=True,
+                 split='train',
+                 standardize=True):
+        super().__init__()
+        self.s2_bands_data = np.load(s2_bands_file_path)
+        self.s2_masks_data = np.load(s2_masks_file_path)
+        self.s2_doys_data = np.load(s2_doy_file_path)
+        self.s1_asc_bands_data = np.load(s1_asc_bands_file_path)
+        self.s1_asc_doys_data = np.load(s1_asc_doy_file_path)
+        self.s1_desc_bands_data = np.load(s1_desc_bands_file_path)
+        self.s1_desc_doys_data = np.load(s1_desc_doy_file_path)
+        self.labels = np.load(labels_path)
+        
+        # Load field_id data (if provided)
+        self.field_ids = None
+        if field_ids_path is not None and os.path.exists(field_ids_path):
+            self.field_ids = np.load(field_ids_path)
+        
+        self.train_fids = train_fids
+        self.val_fids = val_fids
+        self.test_fids = test_fids
+        self.split = split
+        self.is_training = is_training
+
+        self.sample_size_s2 = sample_size_s2
+        self.sample_size_s1 = sample_size_s1
+        self.standardize = standardize
+        self.min_valid_timesteps = min_valid_timesteps
+        
+        self.s2_band_mean = S2_BAND_MEAN
+        self.s2_band_std = S2_BAND_STD
+        self.s1_band_mean = S1_BAND_MEAN
+        self.s1_band_std = S1_BAND_STD
+
+        t_s2, H, W, _ = self.s2_bands_data.shape
+        indices = np.indices((H, W)).reshape(2, -1).T
+
+        self.valid_pixels = []
+        for (i, j) in indices:
+            if self.labels[i, j] == 0:  # Skip background pixels
+                continue
+            fid = self.field_ids[i, j]
+            if self.labels[i, j] == 0:
+                continue
+            if self.split == 'train' and (fid not in self.train_fids):
+                continue
+            if self.split == 'val' and (fid not in self.val_fids):
+                continue
+            if self.split == 'test' and (fid not in self.test_fids):
+                continue
+            # Check if the pixel has enough valid time steps
+            s2_valid = self.s2_masks_data[:, i, j].sum()
+            asc_valid = np.any(self.s1_asc_bands_data[:, i, j, :] != 0, axis=-1).sum()
+            desc_valid = np.any(self.s1_desc_bands_data[:, i, j, :] != 0, axis=-1).sum()
+            
+            if s2_valid >= self.min_valid_timesteps and (asc_valid + desc_valid) >= self.min_valid_timesteps:
+                self.valid_pixels.append((i, j))
+
+    def __len__(self):
+        return len(self.valid_pixels)
+
+    def _prepare_s2_sample(self, s2_bands, s2_masks, s2_doys):
+        """
+        Prepare S2 sample with 64 time steps.
+        """
+        # Find valid time steps
+        valid_indices = np.where(s2_masks)[0]
+        
+        # Create empty array for 64 time steps
+        sample = np.zeros((self.sample_size_s2, s2_bands.shape[-1] + 1))  # +1 for DOY
+        valid_mask = np.zeros(self.sample_size_s2, dtype=bool)
+        
+        if len(valid_indices) > 0:
+            # If we have valid data
+            if len(valid_indices) <= self.sample_size_s2:
+                # If we have fewer valid time steps than needed, use all of them
+                use_indices = valid_indices
+            else:
+                # If we have more valid time steps than needed, select evenly distributed ones
+                indices_chunks = np.array_split(valid_indices, self.sample_size_s2)
+                use_indices = [chunk[len(chunk)//2] for chunk in indices_chunks]
+                
+            # Fill the sample with valid data
+            for i, idx in enumerate(use_indices):
+                if i >= self.sample_size_s2:
+                    break
+                sample[i, :-1] = s2_bands[idx]
+                sample[i, -1] = s2_doys[idx]
+                valid_mask[i] = True
+                
+        # Standardize if needed
+        if self.standardize:
+            sample[:, :-1] = (sample[:, :-1] - self.s2_band_mean) / (self.s2_band_std + 1e-9)
+            
+        return sample, valid_mask
+
+    def _prepare_s1_sample(self, asc_bands, asc_doys, desc_bands, desc_doys):
+        """
+        Prepare S1 sample with 64 time steps, combining ascending and descending data.
+        """
+        # Find valid time steps
+        asc_valid = np.any(asc_bands != 0, axis=-1)
+        desc_valid = np.any(desc_bands != 0, axis=-1)
+        
+        # Extract valid data
+        asc_valid_data = [(asc_bands[i], asc_doys[i]) for i in range(len(asc_doys)) if asc_valid[i]]
+        desc_valid_data = [(desc_bands[i], desc_doys[i]) for i in range(len(desc_doys)) if desc_valid[i]]
+        
+        # Combine and sort by DOY
+        combined_data = asc_valid_data + desc_valid_data
+        if combined_data:
+            combined_data.sort(key=lambda x: x[1])  # Sort by DOY
+            
+        # Create empty array for 64 time steps
+        sample = np.zeros((self.sample_size_s1, asc_bands.shape[-1] + 1))  # +1 for DOY
+        valid_mask = np.zeros(self.sample_size_s1, dtype=bool)
+        
+        if combined_data:
+            # If we have valid data
+            if len(combined_data) <= self.sample_size_s1:
+                # If we have fewer valid time steps than needed, use all of them
+                use_data = combined_data
+            else:
+                # If we have more valid time steps than needed, select evenly distributed ones
+                indices_chunks = np.array_split(range(len(combined_data)), self.sample_size_s1)
+                use_data = [combined_data[chunk[len(chunk)//2]] for chunk in indices_chunks if len(chunk) > 0]
+                
+            # Fill the sample with valid data
+            for i, (band, doy) in enumerate(use_data):
+                if i >= self.sample_size_s1:
+                    break
+                sample[i, :-1] = band
+                sample[i, -1] = doy
+                valid_mask[i] = True
+                
+        # Standardize if needed
+        if self.standardize:
+            sample[:, :-1] = (sample[:, :-1] - self.s1_band_mean) / (self.s1_band_std + 1e-9)
+            
+        return sample, valid_mask
+
+    def __getitem__(self, idx):
+        i, j = self.valid_pixels[idx]
+        label = self.labels[i, j] - 1  # Labels start from 0
+        
+        # Extract S2 data
+        s2_bands_ij = self.s2_bands_data[:, i, j, :]
+        s2_masks_ij = self.s2_masks_data[:, i, j]
+        s2_doys_ij = self.s2_doys_data
+        
+        # Extract S1 data
+        s1_asc_bands_ij = self.s1_asc_bands_data[:, i, j, :]
+        s1_asc_doys_ij = self.s1_asc_doys_data
+        s1_desc_bands_ij = self.s1_desc_bands_data[:, i, j, :]
+        s1_desc_doys_ij = self.s1_desc_doys_data
+        
+        # Prepare samples
+        s2_sample, s2_valid_mask = self._prepare_s2_sample(s2_bands_ij, s2_masks_ij, s2_doys_ij)
+        s1_sample, s1_valid_mask = self._prepare_s1_sample(s1_asc_bands_ij, s1_asc_doys_ij, 
+                                                       s1_desc_bands_ij, s1_desc_doys_ij)
+        
+        # 转为torch tensor
+        s2_sample = torch.tensor(s2_sample, dtype=torch.float32)
+        s1_sample = torch.tensor(s1_sample, dtype=torch.float32)
+        s2_valid_mask = torch.tensor(s2_valid_mask, dtype=torch.bool)
+        s1_valid_mask = torch.tensor(s1_valid_mask, dtype=torch.bool)
+        
+        # Get field_id (if available)
+        return {
+            's2_sample': s2_sample,
+            's1_sample': s1_sample,
+            's2_valid_mask': s2_valid_mask,
+            's1_valid_mask': s1_valid_mask,
+            'label': label
+        }
+
+def austrian_crop_64_fixed_collate_fn(batch):
+    s2_samples = [item['s2_sample'] for item in batch]
+    s1_samples = [item['s1_sample'] for item in batch]
+    s2_valid_masks = [item['s2_valid_mask'] for item in batch]
+    s1_valid_masks = [item['s1_valid_mask'] for item in batch]
+    labels     = [item['label'] for item in batch]
+    s2_samples = torch.stack(s2_samples, dim=0)
+    s1_samples = torch.stack(s1_samples, dim=0)
+    s2_valid_masks = torch.stack(s2_valid_masks, dim=0)
+    s1_valid_masks = torch.stack(s1_valid_masks, dim=0)
+    labels     = torch.tensor(labels, dtype=torch.long)
+    return s2_samples, s1_samples, s2_valid_masks, s1_valid_masks, labels
 
 class BorneoCropRegression(Dataset):
     """
@@ -285,10 +513,14 @@ class BorneoCropRegression(Dataset):
         sub_doys  = s2_doys[sampled_idx]       # (sample_size_s2,)
         if self.standardize:
             sub_bands = (sub_bands - self.s2_band_mean) / (self.s2_band_std + 1e-9)
-        doys_norm = sub_doys / 365.0
-        sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
-        cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
-        result = np.hstack((sub_bands, sin_doy, cos_doy))  # 最终通道数 = C_s2_orig + 2
+        # doys_norm = sub_doys / 365.0
+        # sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
+        # cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
+        # result = np.hstack((sub_bands, sin_doy, cos_doy))  # 最终通道数 = C_s2_orig + 2
+        
+
+        # 直接把doy连接到band上
+        result = np.hstack((sub_bands, sub_doys.reshape(-1, 1)))  # 最终通道数 = C_s2_orig + 1
         return torch.tensor(result, dtype=torch.float32)
     
     def _augment_s1(self, s1_asc_bands, s1_asc_doys, s1_desc_bands, s1_desc_doys):
@@ -313,10 +545,13 @@ class BorneoCropRegression(Dataset):
         sub_doys  = s1_doys_all[sampled_idx]
         if self.standardize:
             sub_bands = (sub_bands - self.s1_band_mean) / (self.s1_band_std + 1e-9)
-        doys_norm = sub_doys / 365.0
-        sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
-        cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
-        result = np.hstack((sub_bands, sin_doy, cos_doy))
+        # doys_norm = sub_doys / 365.0
+        # sin_doy = np.sin(2 * np.pi * doys_norm).reshape(-1, 1)
+        # cos_doy = np.cos(2 * np.pi * doys_norm).reshape(-1, 1)
+        # result = np.hstack((sub_bands, sin_doy, cos_doy))
+        
+        # 直接把doy连接到band上
+        result = np.hstack((sub_bands, sub_doys.reshape(-1, 1)))  # 最终通道数 = C_s1_orig + 1
         return torch.tensor(result, dtype=torch.float32)
 
     def __len__(self):

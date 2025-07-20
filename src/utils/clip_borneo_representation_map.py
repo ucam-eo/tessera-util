@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import argparse
-import cv2  # 用于保存png图像
+import cv2  # 用于保存png图像和resize
 
 def normalize_channel(channel):
     """对单个通道进行最小—最大归一化至 [0, 255]，返回 uint8 数组"""
@@ -24,7 +24,7 @@ def process_rgb_patch(bands_data, masks_data, x, y, patch_size):
     """
     # 提取该区域所有时间步的数据
     bands_patch = bands_data[:, x: x+patch_size, y: y+patch_size, :]  # shape: (T, patch_size, patch_size, B)
-    masks_patch = masks_data[:, x: x+patch_size, y: y+patch_size]       # shape: (T, patch_size, patch_size)
+    masks_patch = masks_data[:, x: x+patch_size, y: y+patch_size]      # shape: (T, patch_size, patch_size)
     
     # 计算每个时间步有效（未被云雾遮挡）像素的数量
     valid_counts = np.sum(masks_patch == 1, axis=(1, 2))
@@ -74,6 +74,12 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
     
     # 加载数据
     rep_data = np.load(rep_file)      # 形状 (H, W, 128)
+    
+    # 如果数据形状为int，则归一化
+    if rep_data.dtype == np.int8:
+        scale_data = np.load(rep_file.replace('.npy', '_scale.npy'))
+        rep_data = rep_data.astype(np.float32) / scale_data
+    
     target_data = np.load(target_file)  # 形状可能为 (1, H, W) 或 (H, W)
     bands_data = np.load(bands_file)    # 形状 (T, H, W, B)
     masks_data = np.load(masks_file)    # 形状 (T, H, W)
@@ -81,10 +87,20 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
     # 去除 target 数据多余的维度（如果有）
     if target_data.ndim == 3 and target_data.shape[0] == 1:
         target_data = target_data[0]
-    
+        
+    # --- 检查并resize representation数据 ---
+    rep_h, rep_w, _ = rep_data.shape
+    target_h, target_w = target_data.shape
+
+    if (rep_h, rep_w) != (target_h, target_w):
+        print(f"Representation ({rep_h}, {rep_w}) 和 Target ({target_h}, {target_w}) 空间尺寸不匹配。")
+        print(f"正在将 Representation resize 为 ({target_h}, {target_w})...")
+        rep_data = cv2.resize(rep_data, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+        print("Resize 完成。")
+
     H, W, _ = rep_data.shape
     if target_data.shape != (H, W):
-        raise ValueError(f"representation 数据形状为 {rep_data.shape}，但 target 数据形状为 {target_data.shape}，尺寸不匹配")
+        raise ValueError(f"Representation 数据 resize 后形状为 {rep_data.shape}，但 target 数据形状为 {target_data.shape}，尺寸仍然不匹配")
     
     patch_count = 0
     # 如果启用 max_overlap，则采用顺序扫描模式
@@ -93,7 +109,7 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
             raise ValueError("max_overlap 必须在 [0, 1) 的范围内")
         stride = patch_size - int(max_overlap * patch_size)
         if stride <= 0:
-            stride = 1  # 避免步长为0的情况
+            stride = 1
         
         print(f"使用 max_overlap 模式进行顺序采样，步长为 {stride}，忽略 --num_patches 参数")
         for x in range(0, H - patch_size + 1, stride):
@@ -103,22 +119,32 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
                 
                 # 如果 target patch 全部为 NaN，则跳过
                 if np.isnan(target_patch).all():
-                    print(f"patch {patch_count:04d} 标签全为 NaN，跳过")
+                    print(f"patch 坐标 ({x}, {y}) 标签全为 NaN，跳过")
                     continue
 
+                # --- 新增代码: 填充含有部分NaN的patch ---
+                if np.isnan(target_patch).any():
+                    # 计算当前patch内非NaN像素的均值
+                    patch_mean = np.nanmean(target_patch)
+                    # 如果patch_mean因为某种原因还是NaN（例如，被上面检查遗漏的全NaN patch），则用0填充
+                    if np.isnan(patch_mean):
+                        patch_mean = 0.0
+                    # 使用计算出的均值填充NaN值
+                    target_patch = np.nan_to_num(target_patch, nan=patch_mean)
+                # --- 新增代码结束 ---
+
                 # 处理RGB patch
-                # rgb_patch = process_rgb_patch(bands_data, masks_data, x, y, patch_size)
+                rgb_patch = process_rgb_patch(bands_data, masks_data, x, y, patch_size)
                 
                 # 保存三个产品
                 rep_patch_path = os.path.join(rep_out_dir, f'rep_patch_{patch_count:04d}.npy')
                 target_patch_path = os.path.join(target_out_dir, f'target_patch_{patch_count:04d}.npy')
-                # rgb_patch_path = os.path.join(rgb_out_dir, f'rgb_patch_{patch_count:04d}.png')
+                rgb_patch_path = os.path.join(rgb_out_dir, f'rgb_patch_{patch_count:04d}.png')
                 
                 np.save(rep_patch_path, rep_patch)
                 np.save(target_patch_path, target_patch)
-                # 注意 cv2.imwrite 默认保存 BGR 格式，所以将 RGB 转为 BGR
-                # bgr_patch = cv2.cvtColor(rgb_patch, cv2.COLOR_RGB2BGR)
-                # cv2.imwrite(rgb_patch_path, bgr_patch)
+                bgr_patch = cv2.cvtColor(rgb_patch, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(rgb_patch_path, bgr_patch)
                 
                 print(f"patch {patch_count:04d} 已保存，位置: ({x}, {y})")
                 patch_count += 1
@@ -128,7 +154,7 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
         # 随机采样模式
         print("使用随机采样模式")
         attempts = 0
-        max_attempts = num_patches * 10  # 防止死循环
+        max_attempts = num_patches * 20  # 增加尝试次数以应对可能的大量NaN区域
         while patch_count < num_patches and attempts < max_attempts:
             attempts += 1
             x = np.random.randint(0, H - patch_size + 1)
@@ -140,6 +166,17 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
             # 如果 target patch 全部为 NaN，则跳过
             if np.isnan(target_patch).all():
                 continue
+
+            # --- 新增代码: 填充含有部分NaN的patch ---
+            if np.isnan(target_patch).any():
+                # 计算当前patch内非NaN像素的均值
+                patch_mean = np.nanmean(target_patch)
+                # 如果patch_mean因为某种原因还是NaN，则用0填充
+                if np.isnan(patch_mean):
+                    patch_mean = 0.0
+                # 使用计算出的均值填充NaN值
+                target_patch = np.nan_to_num(target_patch, nan=patch_mean)
+            # --- 新增代码结束 ---
 
             # 处理RGB patch
             rgb_patch = process_rgb_patch(bands_data, masks_data, x, y, patch_size)
@@ -157,13 +194,13 @@ def generate_patches(rep_file, target_file, bands_file, masks_file, output_dir, 
             patch_count += 1
         
         if patch_count < num_patches:
-            print(f"仅生成 {patch_count} 个有效 patch，达不到指定的 {num_patches} 个。")
+            print(f"警告: 仅生成 {patch_count} 个有效 patch，未达到指定的 {num_patches} 个。可能是源数据中NaN区域过多。")
         else:
             print(f"共生成有效 patch 数量: {patch_count}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="从npy数据生成固定大小的patches，并生成对应的RGB图像")
-    parser.add_argument('--rep_file', type=str, default='/mnt/e/Codes/btfm4rs/data/representation/borneo_representations.npy',
+    parser.add_argument('--rep_file', type=str, default='/mnt/e/Codes/btfm4rs/data/representation/presto_embedding_asset_borneo.npy',
                         help="representation数据的npy文件路径")
     parser.add_argument('--target_file', type=str, default='/mnt/e/Codes/btfm4rs/data/downstream/borneo/Danum_2020_chm_lspikefree_subsampled.npy',
                         help="标签数据的npy文件路径")

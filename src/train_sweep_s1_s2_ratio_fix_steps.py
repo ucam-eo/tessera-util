@@ -138,7 +138,7 @@ def train_and_evaluate():
                 logging.error(f"Could not delete the run from W&B: {ex_del}")
             return
 
-        # 更新 wandb.config（仅用于显示）
+        # 更新 wandb.config（仅用于显示），将 CSV 中的所有列更新进去，便于对比
         wandb.config.update(row_data)
         wandb.config.update({"experiment_id": final_config["experiment_id"]})
 
@@ -445,22 +445,12 @@ def main():
                         help="Either 'init' to init sweep, or 'agent' to run agent.")
     args = parser.parse_args()
 
+    # 修改后的 sweep_config 仅以 row_index 作为超参数，确保每一行的配置独立
     sweep_config = {
         "method": "random",
         "metric": {"goal": "maximize", "name": "val_acc"},
         "parameters": {
-            "row_index": {"values": list(range(len(ALL_ROWS)))},
-            "s2nhead": {"values": [row["s2nhead"] for row in ALL_ROWS]},
-            "s2layer": {"values": [row["s2layer"] for row in ALL_ROWS]},
-            "s2dim_feedforward": {"values": [row["s2dim_feedforward"] for row in ALL_ROWS]},
-            "s2non_embedding": {"values": [row["s2non_embedding"] for row in ALL_ROWS]},
-            "s1nhead": {"values": [row["s1nhead"] for row in ALL_ROWS]},
-            "s1layer": {"values": [row["s1layer"] for row in ALL_ROWS]},
-            "s1dim_feedforward": {"values": [row["s1dim_feedforward"] for row in ALL_ROWS]},
-            "s1non_embedding": {"values": [row["s1non_embedding"] for row in ALL_ROWS]},
-            "ratio_s1_s2": {"values": [row["ratio_s1_s2"] for row in ALL_ROWS]},
-            "alltotal": {"values": [row["alltotal"] for row in ALL_ROWS]},
-            "actual_total": {"values": [row["actual_total"] for row in ALL_ROWS]}
+            "row_index": {"values": list(range(len(ALL_ROWS)))}
         }
     }
 
@@ -472,7 +462,7 @@ def main():
         print("Created sweep with ID:", sweep_id)
     elif args.mode == "agent":
         wandb.agent(
-            sweep_id="ztg9m4tz",  # 请确保使用实际的 sweep_id
+            sweep_id="j5avvm4x",  # 请确保使用实际的 sweep_id
             function=train_and_evaluate,
             project="btfm-param-sweep-s1-s2-ratio-s1-s2-ratio",
             entity="frankfeng1223",

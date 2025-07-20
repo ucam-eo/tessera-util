@@ -59,12 +59,13 @@ class MultimodalDownstreamModel(nn.Module):
     """
     将SSL中训练好的s2和s1骨干接上下游任务head
     """
-    def __init__(self, s2_backbone, s1_backbone, head, fusion_method='sum'):
+    def __init__(self, s2_backbone, s1_backbone, head, dim_reducer, fusion_method):
         super().__init__()
         self.s2_backbone = s2_backbone
         self.s1_backbone = s1_backbone
         self.head = head
         self.fusion_method = fusion_method
+        self.dim_reducer = dim_reducer
 
     def forward(self, s2_x, s1_x):
         s2_repr = self.s2_backbone(s2_x)
@@ -75,5 +76,32 @@ class MultimodalDownstreamModel(nn.Module):
             fused_repr = s2_repr + s1_repr
         else:
             raise ValueError(f"Unsupported fusion method: {self.fusion_method}")
+        fused_repr = self.dim_reducer(fused_repr)
+        out = self.head(fused_repr)
+        return out
+    
+    
+class MultimodalDownstreamModel64Fixed(nn.Module):
+    """
+    将SSL中训练好的s2和s1骨干接上下游任务head
+    """
+    def __init__(self, s2_backbone, s1_backbone, head, dim_reducer, fusion_method):
+        super().__init__()
+        self.s2_backbone = s2_backbone
+        self.s1_backbone = s1_backbone
+        self.head = head
+        self.fusion_method = fusion_method
+        self.dim_reducer = dim_reducer
+
+    def forward(self, s2_x, s1_x, s2_mask=None, s1_mask=None):
+        s2_repr = self.s2_backbone(s2_x, s2_mask)
+        s1_repr = self.s1_backbone(s1_x, s1_mask)
+        if self.fusion_method == 'concat':
+            fused_repr = torch.cat([s2_repr, s1_repr], dim=-1)
+        elif self.fusion_method == 'sum':
+            fused_repr = s2_repr + s1_repr
+        else:
+            raise ValueError(f"Unsupported fusion method: {self.fusion_method}")
+        fused_repr = self.dim_reducer(fused_repr)
         out = self.head(fused_repr)
         return out

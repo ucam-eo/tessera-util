@@ -4,3 +4,16 @@ data/
 wandb/
 **/__pycache__/
 *.png
+*.html
+*.pdf
+src/scaling_laws_data.csv
+*.tif
+*.pt
+*.gif
+pretrained_cache/
+frankfeng1223/
+patches/
+*.xml
+*.json
+*.pth
+*.log

@@ -32,7 +32,7 @@ def load_config_module(config_file_path):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Downstream Classification Training")
-    parser.add_argument('--config', type=str, required=True, help="Path to config file (e.g. configs/downstream_config.py)")
+    parser.add_argument('--config', type=str, default="configs/infer_config.py", help="Path to config file (e.g. configs/downstream_config.py)")
     return parser.parse_args()
 
 def main():
@@ -69,30 +69,49 @@ def main():
     ssl_model = build_ssl_model(config, device)
 
     logging.info("After loading checkpoint, s2_backbone weights:")
-    logging.info(ssl_model.s2_backbone.fc_out.weight)
+    logging.info(ssl_model.s2_backbone.embedding[0].weight)
     logging.info(f"Loading SSL checkpoint from {config['checkpoint_path']}")
     checkpoint = torch.load(config["checkpoint_path"], map_location=device)
     state_key = 'model_state' if 'model_state' in checkpoint else 'model_state_dict'
-    ssl_model.load_state_dict(checkpoint[state_key], strict=True)
+    
+    ################### 用于处理FSDP ###################
+    state_dict = checkpoint[state_key]
+    # 创建新的state_dict，移除"_orig_mod."前缀
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('_orig_mod.'):
+            new_key = key[len('_orig_mod.'):]  # 移除前缀
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    # 使用处理后的state_dict加载模型
+    ssl_model.load_state_dict(new_state_dict, strict=True)
+    #####################################################
+    
+    # ssl_model.load_state_dict(checkpoint[state_key], strict=True)
+    
     logging.info("SSL backbone weights after loading checkpoint (s2 backbone):")
-    logging.info(ssl_model.s2_backbone.fc_out.weight)
+    logging.info(ssl_model.s2_backbone.embedding[0].weight)
     
     # 冻结 SSL 骨干参数
     for param in ssl_model.s2_backbone.parameters():
         param.requires_grad = False
     for param in ssl_model.s1_backbone.parameters():
         param.requires_grad = False
+    for param in ssl_model.dim_reducer.parameters():
+        param.requires_grad = False
     
-        # ------------------------------
+    # ------------------------------
     # 构建推理模型
     # ------------------------------
     model = MultimodalBTInferenceModel(
         s2_backbone=ssl_model.s2_backbone,
         s1_backbone=ssl_model.s1_backbone,
-        fusion_method=config["fusion_method"]
+        fusion_method=config["fusion_method"],
+        dim_reducer=ssl_model.dim_reducer,
     ).to(device)
     logging.info("Inference model constructed. s2 backbone weights:")
-    logging.info(model.s2_backbone.fc_out.weight)
+    logging.info(model.s2_backbone.embedding[0].weight)
     
     model.eval()
 
@@ -113,7 +132,7 @@ def main():
             
             if len(valid_idx) == 0:
                 # 如果该像素所有时刻均为 0，则使用所有时刻的索引（即采样到的结果仍为全 0）
-                valid_idx = np.arange(s2_bands_batch.shape[0])
+                valid_idx = np.arange(s2_bands_batch.shape[1])
             
             if len(valid_idx) < sample_size_s2:
                 idx_chosen = np.random.choice(valid_idx, size=sample_size_s2, replace=True)
@@ -126,11 +145,15 @@ def main():
             if standardize:
                 sub_bands = (sub_bands - band_mean) / (band_std + 1e-9)
 
-            doys_norm = sub_doys / 365.0
-            sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-            cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+            # doys_norm = sub_doys / 365.0
+            # sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+            # cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
 
-            out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s2, 12)
+            # out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s2, 12)
+            
+            # 直接把doy接在后面
+            out_arr = np.hstack([sub_bands, sub_doys.reshape(-1, 1)])  # (sample_size_s2, 11)
+            
             out_list.append(out_arr.astype(np.float32))
 
         return np.stack(out_list, axis=0).astype(np.float32)  # (B, sample_size_s2, 12)
@@ -169,11 +192,15 @@ def main():
             if standardize:
                 sub_bands = (sub_bands - band_mean) / (band_std + 1e-9)
 
-            doys_norm = sub_doys / 365.0
-            sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
-            cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+            # doys_norm = sub_doys / 365.0
+            # sin_doy = np.sin(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
+            # cos_doy = np.cos(2 * np.pi * doys_norm).astype(np.float32).reshape(-1, 1)
 
-            out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s1, 4)
+            # out_arr = np.hstack([sub_bands, sin_doy, cos_doy])  # (sample_size_s1, 4)
+            
+            # 直接把doy接在后面
+            out_arr = np.hstack([sub_bands, sub_doys.reshape(-1, 1)])  # (sample_size_s1, 3)
+            
             out_list.append(out_arr.astype(np.float32))
 
         return np.stack(out_list, axis=0).astype(np.float32)  # (B, sample_size_s1, 4)
@@ -212,16 +239,16 @@ def main():
                 )  # (B, sample_size_s2, 12) float32
 
                 # S1
-                # s1_input_np = sample_s1_batch(
-                #     s1_asc_bands_batch, s1_asc_doys_batch,
-                #     s1_desc_bands_batch, s1_desc_doys_batch,
-                #     band_mean=dataset.s1_band_mean,
-                #     band_std=dataset.s1_band_std,
-                #     sample_size_s1=config["sample_size_s1"],
-                #     standardize=True
-                # )  # (B, sample_size_s1, 4) float32
+                s1_input_np = sample_s1_batch(
+                    s1_asc_bands_batch, s1_asc_doys_batch,
+                    s1_desc_bands_batch, s1_desc_doys_batch,
+                    band_mean=dataset.s1_band_mean,
+                    band_std=dataset.s1_band_std,
+                    sample_size_s1=config["sample_size_s1"],
+                    standardize=True
+                )  # (B, sample_size_s1, 4) float32
                 # 测试将s1_input_np全变为0
-                s1_input_np = np.zeros((B, config["sample_size_s1"], 4), dtype=np.float32)
+                # s1_input_np = np.zeros((B, config["sample_size_s1"], 4), dtype=np.float32)
 
                 # 转成 Tensor => [B, sample_size_s2, 12]
                 s2_input = torch.tensor(s2_input_np, dtype=torch.float32, device=device)

@@ -89,34 +89,52 @@ def main():
     ssl_model = build_ssl_model(config, device)
     
     logging.info("After loading checkpoint, s2_backbone weights:")
-    logging.info(ssl_model.s2_backbone.fc_out.weight)
+    logging.info(ssl_model.s2_backbone.embedding[0].weight)
     logging.info(f"Loading SSL checkpoint from {config['checkpoint_path']}")
     checkpoint = torch.load(config["checkpoint_path"], map_location=device)
     state_key = 'model_state' if 'model_state' in checkpoint else 'model_state_dict'
-    ssl_model.load_state_dict(checkpoint[state_key], strict=True)
+    
+    ################### 用于处理FSDP ###################
+    state_dict = checkpoint[state_key]
+    # 创建新的state_dict，移除"_orig_mod."前缀
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('_orig_mod.'):
+            new_key = key[len('_orig_mod.'):]  # 移除前缀
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    # 使用处理后的state_dict加载模型
+    ssl_model.load_state_dict(new_state_dict, strict=True)
+    #####################################################
+    
+    # ssl_model.load_state_dict(checkpoint[state_key], strict=True)
     logging.info("SSL backbone weights after loading checkpoint (s2 backbone):")
-    logging.info(ssl_model.s2_backbone.fc_out.weight)
+    logging.info(ssl_model.s2_backbone.embedding[0].weight)
     
     # 冻结 SSL 骨干参数
     for param in ssl_model.s2_backbone.parameters():
         param.requires_grad = False
     for param in ssl_model.s1_backbone.parameters():
         param.requires_grad = False
+    for param in ssl_model.dim_reducer.parameters():
+        param.requires_grad = False
 
     # ------------------------------
     # 构建下游回归模型
     # ------------------------------
     if config["fusion_method"] == "concat":
-        regressor_in_dim = config['latent_dim'] * 2
+        regressor_in_dim = config['latent_dim']
     else:
         regressor_in_dim = config['latent_dim']
     reg_head = RegressionHead(input_dim=regressor_in_dim, hidden_dim=512).to(device)
     downstream_model = MultimodalDownstreamModel(s2_backbone=ssl_model.s2_backbone,
-                                                   s1_backbone=ssl_model.s1_backbone,
-                                                   head=reg_head,
-                                                   fusion_method=config["fusion_method"]).to(device)
+                                                  s1_backbone=ssl_model.s1_backbone,
+                                                  head=reg_head,
+                                                  dim_reducer=ssl_model.dim_reducer,
+                                                  fusion_method=config['fusion_method']).to(device)
     logging.info("Downstream model constructed. s2 backbone weights:")
-    logging.info(downstream_model.s2_backbone.fc_out.weight)
+    logging.info(downstream_model.s2_backbone.embedding[0].weight)
     
     optimizer = AdamW(filter(lambda p: p.requires_grad, downstream_model.parameters()),
                       lr=config["lr"], weight_decay=config["weight_decay"])

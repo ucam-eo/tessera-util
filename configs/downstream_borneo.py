@@ -2,7 +2,7 @@
 
 config = {
     # SSL 模型 checkpoint 路径（请确保该 checkpoint 与当前模型结构匹配）
-    "checkpoint_path": "checkpoints/ssl/best_model.pt",
+    "checkpoint_path": "checkpoints/ssl/best_model_fsdp_20250407_195912.pt",
     
     # 数据文件路径（50NNL_subset 文件夹下的各个 numpy 文件）
     "s2_bands_file_path": "data/downstream/borneo/50NNL_subset/bands.npy",
@@ -26,20 +26,14 @@ config = {
     "weight_decay": 0.01,
     
     # 模型相关参数
-    "fusion_method": "sum",   # 可选 "sum" 或 "concat"
-    "sample_size_s2": 20,     # 固定时间步数（光学）
-    "sample_size_s1": 20,     # 固定时间步数（SAR，采自拼接后的数据）
+    "fusion_method": "concat",   # 可选 "sum" 或 "concat"
+    "sample_size_s2": 40,     # 固定时间步数（光学）
+    "sample_size_s1": 40,     # 固定时间步数（SAR，采自拼接后的数据）
     "latent_dim": 128,
-    "s2_num_channels": 12,    # 输入给 S2 Transformer 的通道数
-    "s1_num_channels": 4,     # 输入给 S1 Transformer 的通道数
-    "projector_hidden_dim": 512,
-    "projector_out_dim": 512,
-    
-    # Transformer 参数（可根据需要调整）
-    "nhead": 16,
-    "num_encoder_layers": 32,
-    "dim_feedforward": 512,
-    "dropout": 0.1,
+    "s2_num_channels": 10,    # 输入给 S2 Transformer 的通道数
+    "s1_num_channels": 2,     # 输入给 S1 Transformer 的通道数
+    "projector_hidden_dim": 8192*4,
+    "projector_out_dim": 8192*4,
     
     # 其他设置
     "standardize": True,

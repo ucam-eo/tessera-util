@@ -42,8 +42,86 @@ class_names = [
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Downstream Classification Training")
-    parser.add_argument('--config', type=str, required=True, help="Path to config file (e.g. configs/downstream_config.py)")
+    parser.add_argument('--config', type=str, default="configs/downstream_config.py", help="Path to config file (e.g. configs/downstream_config.py)")
     return parser.parse_args()
+
+def load_encoder_weights_only(checkpoint_path, latent_dim, config, device):
+    """
+    只加载encoder权重，避免创建大的projector
+    """
+    # 创建encoder（不包含projector）
+    s2_backbone = TransformerEncoder(
+        band_num=10,
+        latent_dim=latent_dim,
+        nhead=4,
+        num_encoder_layers=4,
+        dim_feedforward=4096,
+        dropout=0.1,
+        max_seq_len=config['max_seq_len_s2']
+    ).to(device)
+    
+    s1_backbone = TransformerEncoder(
+        band_num=2,
+        latent_dim=latent_dim,
+        nhead=4,
+        num_encoder_layers=4,
+        dim_feedforward=4096,
+        dropout=0.1,
+        max_seq_len=config['max_seq_len_s1']
+    ).to(device)
+    
+    # 从checkpoint中推断dim_reducer的正确结构
+    # 根据错误信息，输入是1024维，输出是128维（latent_dim）
+    dim_reducer = nn.Sequential(nn.Linear(1024, latent_dim)  # 输出维度是latent_dim(128)
+    ).to(device)
+    
+    # 加载checkpoint
+    logging.info(f"Loading checkpoint from {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    print(f"Loaded checkpoint path: {checkpoint_path}")
+    
+    state_key = 'model_state' if 'model_state' in checkpoint else 'model_state_dict'
+    state_dict = checkpoint[state_key]
+    
+    # 处理FSDP前缀
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('_orig_mod.'):
+            new_key = key[len('_orig_mod.'):]
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    
+    # 提取各部分的权重
+    s2_state = {k[len('s2_backbone.'):]: v for k, v in new_state_dict.items() if k.startswith('s2_backbone.')}
+    s1_state = {k[len('s1_backbone.'):]: v for k, v in new_state_dict.items() if k.startswith('s1_backbone.')}
+    dim_reducer_state = {k[len('dim_reducer.'):]: v for k, v in new_state_dict.items() if k.startswith('dim_reducer.')}
+    
+    # 打印维度信息用于调试
+    print("dim_reducer state_dict keys:", list(dim_reducer_state.keys()))
+    for key, value in dim_reducer_state.items():
+        print(f"  {key}: {value.shape}")
+    
+    # 加载权重
+    logging.info("Before loading checkpoint, s2_backbone weights:")
+    logging.info(s2_backbone.embedding[0].weight)
+    
+    s2_backbone.load_state_dict(s2_state, strict=True)
+    s1_backbone.load_state_dict(s1_state, strict=True)
+    dim_reducer.load_state_dict(dim_reducer_state, strict=True)
+    
+    logging.info("After loading checkpoint, s2_backbone weights:")
+    logging.info(s2_backbone.embedding[0].weight)
+    
+    # 冻结权重
+    for param in s2_backbone.parameters():
+        param.requires_grad = False
+    for param in s1_backbone.parameters():
+        param.requires_grad = False
+    for param in dim_reducer.parameters():
+        param.requires_grad = False
+    
+    return s2_backbone, s1_backbone, dim_reducer
 
 def main():
     args_cli = parse_args()
@@ -55,6 +133,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     wandb_run = wandb.init(project="btfm-downstream", config=config)
+    
     # Step 1: 加载标签和field_ids
     labels = np.load(config['labels_path']).astype(np.int64)
     field_ids = np.load(config['field_ids_path']).astype(np.int64)
@@ -181,64 +260,28 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False,
                              num_workers=config['num_workers'], collate_fn=austrian_crop_collate_fn)
 
-    # Step 4: 构建SSL加载的骨干，并加载checkpoint
+    # Step 4: 只加载encoder权重，避免创建大的projector
     latent_dim = config['latent_dim']
-    s2_backbone_ssl = TransformerEncoder(
-        band_num=12,
-        latent_dim=latent_dim,
-        nhead=16,
-        num_encoder_layers=32,
-        dim_feedforward=512,
-        dropout=0.1,
-        max_seq_len=config['max_seq_len_s2']
+    s2_backbone, s1_backbone, dim_reducer = load_encoder_weights_only(
+        config['checkpoint_path'], latent_dim, config, device
     )
-    s1_backbone_ssl = TransformerEncoder(
-        band_num=4,
-        latent_dim=latent_dim,
-        nhead=16,
-        num_encoder_layers=32,
-        dim_feedforward=512,
-        dropout=0.1,
-        max_seq_len=config['max_seq_len_s1']
-    )
-    if config['fusion_method'] == 'concat':
-        input_dim_for_projector = latent_dim * 2
-    else:
-        input_dim_for_projector = latent_dim
-    projector_ssl = ProjectionHead(input_dim_for_projector, config['projector_hidden_dim'], config['projector_out_dim'])
-    # 构建SSL模型，方便载入checkpoint
-    from models.ssl_model import MultimodalBTModel
-    ssl_model = MultimodalBTModel(s2_backbone_ssl, s1_backbone_ssl, projector_ssl,
-                                  fusion_method=config['fusion_method'], return_repr=True).to(device)
-    logging.info(f"Loading checkpoint from {config['checkpoint_path']}")
-    # 打印加载权重前的backbone权重
-    logging.info("Before loading checkpoint, s2_backbone weights:")
-    logging.info(ssl_model.s2_backbone.fc_out.weight)
-    checkpoint = torch.load(config['checkpoint_path'], map_location=device)
-    state_key = 'model_state' if 'model_state' in checkpoint else 'model_state_dict'
-    ssl_model.load_state_dict(checkpoint[state_key], strict=True)
-    # 打印加载权重后的backbone权重
-    logging.info("After loading checkpoint, s2_backbone weights:")
-    logging.info(ssl_model.s2_backbone.fc_out.weight)
-    # 冻结骨干
-    for param in ssl_model.s2_backbone.parameters():
-        param.requires_grad = False
-    for param in ssl_model.s1_backbone.parameters():
-        param.requires_grad = False
 
     # Step 5: 构建下游分类头和完整模型
     if config['fusion_method'] == 'concat':
-        classification_in_dim = latent_dim * 2
+        classification_in_dim = latent_dim
     else:
         classification_in_dim = latent_dim
     clf_head = ClassificationHead(input_dim=classification_in_dim, num_classes=num_classes).to(device)
-    downstream_model = MultimodalDownstreamModel(s2_backbone=ssl_model.s2_backbone,
-                                                  s1_backbone=ssl_model.s1_backbone,
-                                                  classifier=clf_head,
+    downstream_model = MultimodalDownstreamModel(s2_backbone=s2_backbone,
+                                                  s1_backbone=s1_backbone,
+                                                  head=clf_head,
+                                                  dim_reducer=dim_reducer,
                                                   fusion_method=config['fusion_method']).to(device)
+    
     # 打印模型构建后backbone权重
     logging.info("After constructing downstream model, s2_backbone weights:")
-    logging.info(downstream_model.s2_backbone.fc_out.weight)
+    logging.info(downstream_model.s2_backbone.embedding[0].weight)
+    
     optimizer = AdamW(filter(lambda p: p.requires_grad, downstream_model.parameters()),
                       lr=config['lr'], weight_decay=config['weight_decay'])
     criterion = nn.CrossEntropyLoss().to(device)
@@ -276,6 +319,7 @@ def main():
             "train_acc": train_acc,
             "train_f1": train_f1
         }, step=epoch)
+        
         # ---- Validation
         downstream_model.eval()
         val_preds, val_targets = [], []
@@ -295,12 +339,14 @@ def main():
             "val_f1": val_f1
         }, step=epoch)
         logging.info(f"[Epoch {epoch+1}] Val Acc={val_acc:.4f}, Val F1={val_f1:.4f}")
+        
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             best_val_acc = val_acc
             best_epoch = epoch+1
             torch.save(downstream_model.state_dict(), best_ckpt_path)
             logging.info(f"Saved best model at epoch {best_epoch}")
+    
     # ---- Test
     logging.info(f"Loading best checkpoint from epoch {best_epoch} for test evaluation.")
     downstream_model.load_state_dict(torch.load(best_ckpt_path))
@@ -322,12 +368,15 @@ def main():
     logging.info(f"Classification Report:\n{report}")
     cm_df = pd.DataFrame(conf_mat, index=class_names, columns=class_names)
     logging.info(f"\nConfusion Matrix:\n{cm_df}")
+    
     # 保存测试结果到txt文件
+    os.makedirs("logs", exist_ok=True)
     with open(os.path.join("logs", "austrian_crop_results.txt"), "w") as f:
         f.write(f"Test Acc: {test_acc:.4f}\n")
         f.write(f"Test F1: {test_f1:.4f}\n")
         f.write(f"Classification Report:\n{report}\n")
         f.write(f"\nConfusion Matrix:\n{cm_df}\n")
+    
     wandb.log({"test_acc": test_acc, "test_f1": test_f1})
     wandb_run.finish()
 

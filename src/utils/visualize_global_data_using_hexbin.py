@@ -278,7 +278,7 @@ def main():
             ax.add_patch(black_patch)
     
     # 绘制世界边界
-    world.boundary.plot(ax=ax, color='gray', linewidth=0.5, alpha=0.1)
+    world.boundary.plot(ax=ax, color='gray', linewidth=0.5, alpha=0.8)
     ax.set_xlim(minx, maxx)
     ax.set_ylim(miny, maxy)
     ax.set_aspect('equal')
