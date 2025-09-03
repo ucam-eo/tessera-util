@@ -28,6 +28,6 @@ def convert_tiff_to_npy(tiff_path, out_dir):
     print(f"NumPy 文件已保存为：{out_path}")
 
 if __name__ == "__main__":
-    tiff_path = "/mnt/e/Codes/btfm4rs/data/representation/Austria_EFM_Embeddings_2021_method1_100m.tif"  # 修改为实际TIFF文件路径
+    tiff_path = "/mnt/e/Codes/btfm4rs/data/representation/austrian_crop_EFM_v1.0_Embeddings_2022_100x_downsampled.tif"  # 修改为实际TIFF文件路径
     out_dir = "/mnt/e/Codes/btfm4rs/data/representation"  # 修改为实际输出目录
     convert_tiff_to_npy(tiff_path, out_dir)

@@ -230,7 +230,7 @@ def main(args):
     # Using example paths from the original script.
     # For a real run, these might need to be configurable or checked.
     base_data_path = "data/downstream/austrian_crop/"
-    repr_path = os.path.join(base_data_path, "inference_repr_33UXP.npy")
+    repr_path = "/mnt/e/Codes/btfm4rs/data/representation/austrian_crop_mpc_pipeline_fsdp_20250604_100313.npy"
     label_path = os.path.join(base_data_path, "fieldtype_17classes.npy")
 
     if not (os.path.exists(repr_path) and os.path.exists(label_path)):
@@ -391,15 +391,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_patches", type=int, default=3000, 
                         help="Target number of patches to generate (only in random sampling mode).")
-    parser.add_argument("--patch_size", type=int, default=64, 
+    parser.add_argument("--patch_size", type=int, default=32, 
                         help="Side length of the square patch.")
     parser.add_argument("--output_dir", type=str, default="data/downstream/austrian_crop_patch_split", 
                         help="Output directory for saved files (train/test subfolders will be created).")
     parser.add_argument("--seed", type=int, default=42, 
                         help="Random seed for reproducibility of sampling and splitting.")
-    parser.add_argument("--max_overlap_ratio", type=float, default=-1, 
+    parser.add_argument("--max_overlap_ratio", type=float, default=0, 
                         help="Maximum overlap ratio (0 to <1) for sequential sampling. If >= 0, enables sequential mode, otherwise random.")
-    parser.add_argument("--training_ratio", type=float, default=0.1, 
+    parser.add_argument("--training_ratio", type=float, default=0.01, 
                         help="Proportion of patches for the training set (e.g., 0.7 for 70%% train). Must be >0 and <1.")
     
     args = parser.parse_args()

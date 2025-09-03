@@ -12,6 +12,7 @@ import pandas as pd
 from datetime import datetime
 import argparse
 import xgboost as xgb  # Added XGBoost import
+from scipy.ndimage import zoom  # For resizing arrays
 
 # -----------------------------------------------------------------------------
 # Dataset类：支持训练和测试划分
@@ -109,6 +110,48 @@ def create_train_test_split(representations, labels, sample_per_pixel):
     test_labels = valid_labels[test_indices]
     
     return train_reps, train_labels, test_reps, test_labels
+
+# -----------------------------------------------------------------------------
+# 形状对齐函数：调整representations以匹配labels的空间维度
+# -----------------------------------------------------------------------------
+def align_shapes(representations, labels):
+    """
+    调整representations的空间维度以匹配labels
+    
+    Args:
+        representations (ndarray): 特征表示，形状 (H1, W1, D)
+        labels (ndarray): 标签，形状 (H2, W2)
+        
+    Returns:
+        aligned_representations (ndarray): 调整后的特征表示，形状 (H2, W2, D)
+    """
+    rep_h, rep_w, rep_d = representations.shape
+    label_h, label_w = labels.shape
+    
+    logging.info(f"Original representations shape: ({rep_h}, {rep_w}, {rep_d})")
+    logging.info(f"Labels shape: ({label_h}, {label_w})")
+    
+    if rep_h == label_h and rep_w == label_w:
+        logging.info("Shapes already match, no alignment needed")
+        return representations
+    
+    # 计算缩放因子
+    zoom_h = label_h / rep_h
+    zoom_w = label_w / rep_w
+    
+    logging.info(f"Zoom factors: height={zoom_h:.4f}, width={zoom_w:.4f}")
+    
+    # 使用scipy的zoom函数进行调整
+    # order=1 使用双线性插值，对于连续值较合适
+    aligned_representations = zoom(representations, (zoom_h, zoom_w, 1), order=1)
+    
+    logging.info(f"Aligned representations shape: {aligned_representations.shape}")
+    
+    # 验证形状
+    assert aligned_representations.shape[0] == label_h, f"Height mismatch after alignment: {aligned_representations.shape[0]} != {label_h}"
+    assert aligned_representations.shape[1] == label_w, f"Width mismatch after alignment: {aligned_representations.shape[1]} != {label_w}"
+    
+    return aligned_representations
 
 # -----------------------------------------------------------------------------
 # 评估函数：计算各种性能指标
@@ -262,7 +305,9 @@ def main():
     parser.add_argument('--num_experiment', type=int, default=200, help='Number of experiments to run')
     parser.add_argument('--result_dir', type=str, default='/mnt/e/Codes/btfm4rs/data/downstream/austrian_crop/logs', help='Directory to save results')
     parser.add_argument('--representation_path', type=str, 
-                        default="data/representation/representations_fsdp_20250427_084307_repreat_1_downsample_100.npy", 
+                        # default="data/representation/representations_fsdp_20250427_084307_repreat_1_downsample_100.npy", 
+                        default="data/representation/austria_Presto_embeddings_100m.npy", 
+                        # default="data/representation/austrian_crop_EFM_v1.0_Embeddings_2022_100x_downsampled.npy", 
                         help='Path to representation file')
     parser.add_argument('--label_path', type=str, 
                         default="data/downstream/austrian_crop/fieldtype_17classes_downsample_100.npy", 
@@ -328,6 +373,17 @@ def main():
     representations = np.load(args.representation_path)  # (H, W, D)
     labels = np.load(args.label_path).astype(np.int64)   # (H, W)
     
+    # -------------------------
+    # 检查并对齐空间维度
+    # -------------------------
+    logging.info("Checking spatial dimensions...")
+    representations = align_shapes(representations, labels)
+    
+    # 再次验证形状
+    logging.info(f"Final representations shape: {representations.shape}")
+    logging.info(f"Final labels shape: {labels.shape}")
+    assert representations.shape[:2] == labels.shape, f"Shape mismatch after alignment: {representations.shape[:2]} != {labels.shape}"
+    
     # 记录原始标签信息
     original_unique_labels = np.unique(labels)
     logging.info(f"Original unique labels: {original_unique_labels}")
@@ -349,12 +405,18 @@ def main():
     logging.info(f"Number of valid classes after excluding background: {num_valid_classes}")
     logging.info(f"Label mapping (original->new): {label_map}")
     
+    # 检查重映射后的数据统计
+    valid_pixels = np.sum(labels_remapped != -1)
+    total_pixels = labels_remapped.size
+    logging.info(f"Valid pixels: {valid_pixels}/{total_pixels} ({valid_pixels/total_pixels*100:.2f}%)")
+    
     # -------------------------
     # 模型基本配置
     # -------------------------
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f"Using device: {device}")
     input_dim = representations.shape[-1]
+    logging.info(f"Input dimension (number of features): {input_dim}")
     
     # 用于存储所有实验结果的列表
     all_results = []
@@ -363,13 +425,22 @@ def main():
     # 运行多次实验
     # -------------------------
     for exp_id in range(args.num_experiment):
+        logging.info(f"\n{'='*60}")
         logging.info(f"Starting experiment {exp_id+1}/{args.num_experiment}")
+        logging.info(f"{'='*60}")
         
         # 创建训练和测试集 - 使用重映射后的标签
         train_reps, train_labels, test_reps, test_labels = create_train_test_split(
             representations, labels_remapped, args.sample_per_pixel)
         
         logging.info(f"Exp {exp_id+1}: Train size: {len(train_reps)}, Test size: {len(test_reps)}")
+        
+        # 统计每个类别的训练样本数
+        unique_train_labels, train_counts = np.unique(train_labels, return_counts=True)
+        logging.info(f"Exp {exp_id+1}: Training samples per class:")
+        for label, count in zip(unique_train_labels, train_counts):
+            if label < len(class_names):
+                logging.info(f"  Class {label} ({class_names[label]}): {count} samples")
         
         # 根据所选方法执行不同的训练和评估流程
         if args.method == 'mlp':
@@ -389,6 +460,7 @@ def main():
             optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01)
             
             # 训练循环
+            logging.info(f"Exp {exp_id+1}: Starting MLP training...")
             for epoch in range(args.num_epochs):
                 model.train()
                 running_loss = 0.0
@@ -436,7 +508,8 @@ def main():
                 'objective': 'multi:softmax',
                 'num_class': num_valid_classes,
                 'eval_metric': ['merror', 'mlogloss'],
-                'tree_method': 'auto'
+                'tree_method': 'auto',
+                'verbosity': 0  # 减少XGBoost的输出
             }
             
             # 创建DMatrix
@@ -444,14 +517,26 @@ def main():
             dtest = xgb.DMatrix(test_reps, label=test_labels)
             
             # 训练XGBoost模型
-            logging.info(f"Exp {exp_id+1} - Training XGBoost model")
+            logging.info(f"Exp {exp_id+1} - Training XGBoost model...")
+            
+            # 定义评估列表
+            evals = [(dtrain, 'train'), (dtest, 'test')]
+            evals_result = {}
+            
+            # 训练模型
             xgb_model = xgb.train(
                 xgb_params,
                 dtrain,
                 num_boost_round=args.xgb_num_round,
-                evals=[(dtrain, 'train'), (dtest, 'test')],
-                verbose_eval=10  # 每10轮打印一次评估结果
+                evals=evals,
+                evals_result=evals_result,
+                verbose_eval=False  # 禁用详细评估输出
             )
+            
+            # 打印最终的训练结果
+            final_train_error = evals_result['train']['merror'][-1]
+            final_test_error = evals_result['test']['merror'][-1]
+            logging.info(f"Exp {exp_id+1} - XGBoost Final - Train Error: {final_train_error:.4f}, Test Error: {final_test_error:.4f}")
             
             # 最终测试评估
             logging.info(f"Exp {exp_id+1} - Evaluating XGBoost on test set")
@@ -502,16 +587,28 @@ def main():
     # -------------------------
     results_df = pd.DataFrame(all_results)
     results_df.to_csv(result_csv_path, index=False)
-    logging.info(f"All experiment results saved to {result_csv_path}")
+    logging.info(f"\nAll experiment results saved to {result_csv_path}")
     
     # -------------------------
     # 打印结果的统计信息
     # -------------------------
-    logging.info("\nExperiment Statistics:")
+    logging.info("\n" + "="*60)
+    logging.info("EXPERIMENT STATISTICS:")
+    logging.info("="*60)
     for metric in ['overall_accuracy', 'overall_f1', 'overall_precision', 'overall_recall', 'balanced_acc']:
         values = results_df[metric].values
-        logging.info(f"{metric}: mean={np.mean(values):.4f}, std={np.std(values):.4f}, "
-                     f"min={np.min(values):.4f}, max={np.max(values):.4f}")
+        logging.info(f"{metric}:")
+        logging.info(f"  Mean: {np.mean(values):.4f}")
+        logging.info(f"  Std:  {np.std(values):.4f}")
+        logging.info(f"  Min:  {np.min(values):.4f}")
+        logging.info(f"  Max:  {np.max(values):.4f}")
+    
+    # 计算并打印每个类别的平均性能
+    logging.info("\nPER-CLASS AVERAGE PERFORMANCE:")
+    for i in range(num_valid_classes):
+        if f'class_{i+1}_f1' in results_df.columns:
+            class_f1_values = results_df[f'class_{i+1}_f1'].values
+            logging.info(f"Class {i} ({class_names[i]}): F1={np.mean(class_f1_values):.4f} ± {np.std(class_f1_values):.4f}")
 
 if __name__ == "__main__":
     main()

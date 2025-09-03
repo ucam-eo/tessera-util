@@ -159,24 +159,24 @@
 
 import numpy as np
 
-file_path = "/mnt/e/Codes/btfm4rs/data/representation/Austria_EFM_Embeddings_2021_method1_100m.npy"
+file_path = "/mnt/e/Codes/btfm4rs/data/ready_to_use/aug1/s2/data_B1_F1.npy"
 data = np.load(file_path, mmap_mode='r')
 print(data.shape)  # 输出数组的形状
-print(data)
+# print(data)
 
-# rgb = data[:, :, :3,0].copy()  # 获取前3个波段
-rgb = data[:, :, :3].copy()  # 获取前3个波段
-rgb = rgb.astype(np.float32)  # 转为float
-# #归一化
-for i in range(3):
-    rgb[:, :, i] = (rgb[:, :, i] - np.min(rgb[:, :, i])) / (np.max(rgb[:, :, i]) - np.min(rgb[:, :, i]))
-# 可视化
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
-plt.imshow(rgb)
-plt.savefig('repr_efm.png')
-plt.close()
+# # rgb = data[:, :, :3,0].copy()  # 获取前3个波段
+# rgb = data[:, :, :3].copy()  # 获取前3个波段
+# rgb = rgb.astype(np.float32)  # 转为float
+# # #归一化
+# for i in range(3):
+#     rgb[:, :, i] = (rgb[:, :, i] - np.min(rgb[:, :, i])) / (np.max(rgb[:, :, i]) - np.min(rgb[:, :, i]))
+# # 可视化
+# import matplotlib
+# matplotlib.use('Agg')  # Use non-interactive backend
+# import matplotlib.pyplot as plt
+# plt.imshow(rgb)
+# plt.savefig('repr_efm.png')
+# plt.close()
 
 # file_path1 = "data/representation/austrian_crop_downsample_100_fsdp_20250407_195912.npy"
 # data1 = np.load(file_path1) # (527, 602, 64)

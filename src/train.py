@@ -64,11 +64,11 @@ def main():
     logging.info(f"Total steps = {total_steps}")
 
     # 建立模型
-    s2_num_heads = 8
-    s2_num_layers = 8
+    s2_num_heads = 4
+    s2_num_layers = 4
     s2_dim_feedforward = 1024
-    s1_num_heads = 8
-    s1_num_layers = 8
+    s1_num_heads = 4
+    s1_num_layers = 4
     s1_dim_feedforward = 1024
     
     # s2_num_heads = 8

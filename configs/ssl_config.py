@@ -4,7 +4,7 @@ config = {
     # "data_root": "data/ready_to_use",
     # "data_root": "data/ready_to_use_3_aug",
     # "data_root": "data/ready_to_use_min_step_30",
-    "data_root": "data/ready_to_use_64_steps",
+    "data_root": "data/ready_to_use_40",
     "batch_size": 256,
     "epochs": 1,
     "learning_rate": 0.002,
@@ -13,9 +13,9 @@ config = {
     "latent_dim": 128,
     "projector_hidden_dim": 4096,
     "projector_out_dim": 4096,
-    "min_valid_timesteps": 20,
-    "sample_size_s2": 64,
-    "sample_size_s1": 64,
+    "min_valid_timesteps": 0,
+    "sample_size_s2": 40,
+    "sample_size_s1": 40,
     "num_workers": 8,
     "shuffle_tiles": True,
     "log_interval_steps":10,
@@ -36,7 +36,7 @@ config = {
     "training_ratio": 0.1,  # 用于训练的field面积比例
     "val_test_split_ratio": 1/7,  # 验证集和测试集之间的分割比例
     # 多次推理
-    "num_inference": 10,  # 推理次数，取平均
+    "num_inference": 1,  # 推理次数，取平均
     # 线性探针的分类器类型
     "classifier_type": "lr",  # 选项: 'lr' (LogisticRegression) 或 'rf' (RandomForest)
     
