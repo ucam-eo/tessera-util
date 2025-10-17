@@ -1028,10 +1028,10 @@ class CombinedCELovászLoss(nn.Module):
 def get_file_lists(repr_root_dir, label_root_dir):
     """
     从指定的根目录中查找 representation 与 label 文件
-    representation 文件命名格式为 representation_*.npy
+    representation 文件命名格式为 *.npy
     label 文件命名格式为 TARGET_*.npy
     """
-    rep_files = sorted(glob.glob(os.path.join(repr_root_dir, "representation_*.npy")))
+    rep_files = sorted(glob.glob(os.path.join(repr_root_dir, "*.npy")))
     target_files = sorted(glob.glob(os.path.join(label_root_dir, "TARGET_*.npy")))
     return rep_files, target_files
 
@@ -1041,7 +1041,7 @@ def split_data_by_metadata(rep_files, target_files, metadata_path):
       - Fold 1,2,3 作为训练集
       - Fold 4 作为验证集
       - Fold 5 作为测试集
-    文件名中的 patch id 与 metadata 中的 ID_PATCH 一致，如 representation_10000.npy 对应 ID_PATCH=10000
+    文件名中的 patch id 与 metadata 中的 ID_PATCH 一致，如 10000.npy 对应 ID_PATCH=10000
     """
     # 加载 metadata 文件
     with open(metadata_path, 'r') as f:
@@ -1056,8 +1056,8 @@ def split_data_by_metadata(rep_files, target_files, metadata_path):
     # 构建从 patch id 到文件路径的映射（对于 representation 和 TARGET 文件）
     rep_dict = {}
     for rep_file in rep_files:
-        basename = os.path.basename(rep_file)  # e.g. representation_10000.npy
-        patch_id = basename.replace("representation_", "").replace(".npy", "")
+        basename = os.path.basename(rep_file)  # e.g. 10000.npy
+        patch_id = basename.replace(".npy", "")
         rep_dict[patch_id] = rep_file
 
     target_dict = {}
@@ -1362,7 +1362,7 @@ def test_model(model, test_loader, device, num_classes, model_name="effective_se
     # 加载最佳 checkpoint
     checkpoint_path = os.path.join("checkpoints", "downstream", f"best_pastis_patch_seg_{model_name}_ckpt.pth")
     if os.path.exists(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model_state_dict"])
         print(f"Loaded best checkpoint from epoch {checkpoint['epoch']} with Val Loss: {checkpoint['val_loss']:.4f}")
         if 'val_miou' in checkpoint:
@@ -1446,29 +1446,54 @@ def test_model(model, test_loader, device, num_classes, model_name="effective_se
 ####################################
 def parse_args():
     parser = argparse.ArgumentParser(description='Train segmentation models on PASTIS patches')
-    parser.add_argument('--model', type=str, default='effective_segnet', 
+    parser.add_argument('--model', type=str, default='unet', 
                         choices=['unet', 'depthwise_unet', 'efficient_light_segnet', 'lightweight_segnet', 'effective_segnet'],
                         help='Model type to use')
-    parser.add_argument('--epochs', type=int, default=300, help='Number of epochs to train')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of workers for data loading')
+    parser.add_argument('--train_ratio', type=float, default=1.0, help='Ratio of training data to use (0.0-1.0)')
     return parser.parse_args()
 
 def main():
+    # 解析命令行参数
+    args = parse_args()
+    
     # 设置随机种子以确保可重复性
     torch.manual_seed(42)
     random.seed(42)
     np.random.seed(42)
     
     # 数据所在的根目录（请根据实际情况修改路径）
-    rep_root_dir = "/scratch/zf281/pastis/representation/dawn_val_acc_75946"
-    label_root_dir = "/scratch/zf281/pastis/data/ANNOTATIONS"
-    metadata_path = "/scratch/zf281/pastis/data/metadata.geojson"
+    rep_root_dir = "/scratch/zf281/pangaea-bench/data/PASTIS-HD/EMBEDDING"
+    label_root_dir = "/scratch/zf281/pangaea-bench/data/PASTIS-HD/ANNOTATIONS"
+    metadata_path = "/scratch/zf281/pangaea-bench/data/PASTIS-HD/metadata.geojson"
     rep_files, target_files = get_file_lists(rep_root_dir, label_root_dir)
     
     # 根据 metadata 中的 Fold 字段进行数据集划分
     (train_rep, train_target), (val_rep, val_target), (test_rep, test_target) = split_data_by_metadata(rep_files, target_files, metadata_path)
+    
+    # 根据train_ratio参数对训练数据进行子采样
+    if args.train_ratio < 1.0:
+        # 确保train_ratio在有效范围内
+        train_ratio = max(0.0, min(1.0, args.train_ratio))
+        
+        # 计算要使用的训练样本数量
+        num_train_samples = int(len(train_rep) * train_ratio)
+        
+        # 随机选择训练样本的索引（保持随机种子一致性）
+        train_indices = list(range(len(train_rep)))
+        random.shuffle(train_indices)
+        selected_indices = train_indices[:num_train_samples]
+        
+        # 根据选择的索引获取子集
+        train_rep = [train_rep[i] for i in selected_indices]
+        train_target = [train_target[i] for i in selected_indices]
+        
+        print(f"使用训练数据比例: {train_ratio:.2f}, 训练样本数: {len(train_rep)}")
+    else:
+        print(f"使用全部训练数据, 训练样本数: {len(train_rep)}")
     
     # 训练集开启增强的数据增强
     train_dataset = PastisPatchDataset(train_rep, train_target, augment=True)
@@ -1477,10 +1502,10 @@ def main():
     
     print(f"Train: {len(train_dataset)} | Val: {len(val_dataset)} | Test: {len(test_dataset)}")
     
-    batch_size = 16
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    batch_size = args.batch_size
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=args.num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=args.num_workers)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_classes = 20  # 总共20个类别，其中标签19为空标签
@@ -1504,7 +1529,7 @@ def main():
     }
     
     # 选择模型 - 使用我们的新模型
-    model_type = "effective_segnet"  # 可选: "unet", "depthwise_unet", "efficient_light_segnet", "effective_segnet"
+    model_type = args.model  # 使用命令行参数
     
     if model_type == "unet":
         model = UNet(in_channels=128, num_classes=num_classes, dropout=0.1)
@@ -1547,8 +1572,8 @@ def main():
     print(f"模型架构:\n{model.__class__.__name__}")
     
     # 训练模型
-    epochs = 300   # 更多epoch以充分训练
-    lr = 3e-4      # 较小的学习率
+    epochs = args.epochs   # 使用命令行参数
+    lr = args.lr      # 使用命令行参数
     
     train_model(model, train_loader, val_loader, device, num_classes, epochs=epochs, lr=lr, model_name=model_name)
     

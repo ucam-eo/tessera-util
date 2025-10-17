@@ -1,0 +1,17 @@
+{
+  "year": 2024,
+  "total_samples": 391146,
+  "solar_panels": 18626,
+  "others": 372520,
+  "embedding_dimension": 128,
+  "umap_dimension": 2,
+  "random_seed": 42,
+  "umap_range_x": [
+    -8.330228805541992,
+    25.25821876525879
+  ],
+  "umap_range_y": [
+    -3.7546088695526123,
+    23.95176124572754
+  ]
+}

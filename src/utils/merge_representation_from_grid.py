@@ -7,6 +7,8 @@ from rasterio.transform import from_bounds
 from rasterio.merge import merge
 from rasterio.warp import calculate_default_transform, reproject
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Rectangle
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
 from tqdm import tqdm
@@ -15,6 +17,8 @@ import warnings
 from collections import defaultdict
 import pyproj
 import shutil
+import random
+import re
 warnings.filterwarnings('ignore')
 
 def analyze_dateline_crossing(bounds_list):
@@ -698,6 +702,240 @@ def get_crs_name(crs_string):
     else:
         return crs_string.replace(':', '_').lower()
 
+def load_and_dequantize_representation(representation_int8, scales):
+    """
+    Dequantize int8 representations back to float32.
+    
+    Args:
+        representation_int8: int8 ndarray of shape (H,W,C)
+        scales: float32 ndarray of shape (H,W)
+    
+    Returns:
+        representation_f32: float32 ndarray of shape (H,W,C)
+    """
+    # Convert int8 to float32 for computation
+    representation_f32 = representation_int8.astype(np.float32)
+    
+    # Expand scales to match representation shape
+    # scales shape: (H, W) -> (H, W, 1)
+    scales_expanded = scales[..., np.newaxis]
+    
+    # Dequantize by multiplying with scales
+    representation_f32 = representation_f32 * scales_expanded
+    
+    return representation_f32
+
+def extract_grid_coordinates(grid_name):
+    """
+    Extract latitude and longitude coordinates from grid name.
+    
+    Args:
+        grid_name: String like 'grid_-2.35_125.75' or 'grid_-2.35_125.75_multiband'
+    
+    Returns:
+        tuple: (lat, lon) as floats, or None if parsing fails
+    """
+    try:
+        # Remove 'grid_' prefix and any suffix after the coordinates
+        clean_name = grid_name
+        if clean_name.startswith('grid_'):
+            clean_name = clean_name[5:]  # Remove 'grid_' prefix
+        
+        # Split by '_' and take first two parts (lat, lon)
+        parts = clean_name.split('_')
+        if len(parts) >= 2:
+            lat = float(parts[0])
+            lon = float(parts[1])
+            return lat, lon
+        else:
+            return None
+    except (ValueError, IndexError):
+        return None
+
+def create_grid_boundaries_visualization(tiff_info_list, target_crs, resolution, output_path, 
+                                       location_name, crs_name, bands_suffix, filter_suffix,
+                                       filter_cross_dateline_tiles=True):
+    """
+    Create a visualization showing only the grid boundaries with colored outlines and grid labels.
+    
+    Args:
+        tiff_info_list: List of tiff info dictionaries containing grid information
+        target_crs: Target coordinate reference system
+        resolution: Resolution in meters
+        output_path: Path to save the output PNG
+        location_name: Name of the location
+        crs_name: Human-readable CRS name
+        bands_suffix: Suffix indicating number of bands
+        filter_suffix: Suffix indicating if dateline filtering was applied
+        filter_cross_dateline_tiles: Whether to filter tiles crossing dateline
+    """
+    print("\nCreating grid boundaries visualization...")
+    
+    # Filter tiles if needed (same as in merge function)
+    if filter_cross_dateline_tiles:
+        all_bounds_wgs84 = []
+        for info in tiff_info_list:
+            with rasterio.open(info['path']) as src:
+                if str(src.crs) != 'EPSG:4326':
+                    transformer = pyproj.Transformer.from_crs(src.crs, 'EPSG:4326', always_xy=True)
+                    west, south = transformer.transform(src.bounds.left, src.bounds.bottom)
+                    east, north = transformer.transform(src.bounds.right, src.bounds.top)
+                else:
+                    west, south, east, north = src.bounds.left, src.bounds.bottom, src.bounds.right, src.bounds.top
+                all_bounds_wgs84.append((west, south, east, north))
+        
+        crosses_dateline, _, _ = analyze_dateline_crossing(all_bounds_wgs84)
+        if crosses_dateline:
+            tiff_info_list = filter_tiles_by_dateline(tiff_info_list, filter_cross_dateline_tiles)
+    
+    if not tiff_info_list:
+        print("No tiles to visualize")
+        return
+    
+    # Get bounds in target CRS for all tiles
+    all_bounds_target = []
+    grid_info = []  # Store grid name and bounds for visualization
+    
+    for info in tiff_info_list:
+        with rasterio.open(info['path']) as src:
+            bounds = src.bounds
+            all_bounds_target.append(bounds)
+            
+            # Extract coordinates from grid name for labeling
+            coords = extract_grid_coordinates(info['grid_name'])
+            if coords:
+                lat, lon = coords
+                # Format the label - remove 'grid_' prefix and format coordinates
+                label = f"{lat:.2f}, {lon:.2f}"
+            else:
+                # Fallback to original grid name without prefix
+                label = info['grid_name'].replace('grid_', '') if info['grid_name'].startswith('grid_') else info['grid_name']
+            
+            grid_info.append({
+                'name': info['grid_name'],
+                'label': label,
+                'bounds': bounds
+            })
+    
+    # Calculate overall extent
+    west = min(b.left for b in all_bounds_target)
+    south = min(b.bottom for b in all_bounds_target)
+    east = max(b.right for b in all_bounds_target)
+    north = max(b.top for b in all_bounds_target)
+    
+    print(f"Visualization extent in {target_crs}: {west:.2f}, {south:.2f}, {east:.2f}, {north:.2f}")
+    print(f"Number of grids to visualize: {len(grid_info)}")
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(20, 15))
+    
+    # Set up the plot extent
+    ax.set_xlim(west, east)
+    ax.set_ylim(south, north)
+    
+    # Generate random colors for each grid
+    random.seed(42)  # For reproducibility
+    colors = []
+    for _ in range(len(grid_info)):
+        # Generate bright, distinct colors
+        hue = random.random()
+        saturation = 0.7 + random.random() * 0.3  # High saturation for vivid colors
+        value = 0.7 + random.random() * 0.3  # High value for bright colors
+        
+        # Convert HSV to RGB
+        import colorsys
+        r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
+        colors.append((r, g, b))
+    
+    # Calculate appropriate font size based on number of grids and plot size
+    if len(grid_info) > 100:
+        font_size = 4
+    elif len(grid_info) > 50:
+        font_size = 6
+    elif len(grid_info) > 20:
+        font_size = 8
+    else:
+        font_size = 10
+    
+    # Draw grid boundaries and labels
+    for i, (grid, color) in enumerate(zip(grid_info, colors)):
+        bounds = grid['bounds']
+        
+        # Create rectangle for grid boundary
+        rect = Rectangle(
+            (bounds.left, bounds.bottom),
+            bounds.right - bounds.left,
+            bounds.top - bounds.bottom,
+            linewidth=2,
+            edgecolor=color,
+            facecolor='none',  # Hollow rectangle
+            alpha=0.8,
+            label=grid['name'] if i < 10 else ""  # Only label first 10 in legend to avoid clutter
+        )
+        ax.add_patch(rect)
+        
+        # Add grid label as text in the center of each rectangle
+        center_x = (bounds.left + bounds.right) / 2
+        center_y = (bounds.bottom + bounds.top) / 2
+        
+        # Add text with black color and white background for better visibility
+        ax.text(center_x, center_y, grid['label'], 
+                ha='center', va='center', 
+                fontsize=font_size, 
+                color='black', 
+                weight='bold',
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+    
+    # Set title and labels
+    title = f'{location_name.title()} Grid Boundaries ({resolution}m resolution, {target_crs})'
+    if filter_suffix:
+        title += ' - Dateline Filtered'
+    ax.set_title(title, fontsize=16, fontweight='bold')
+    
+    # Set axis labels based on CRS
+    if target_crs == 'EPSG:4326':
+        ax.set_xlabel('Longitude', fontsize=12)
+        ax.set_ylabel('Latitude', fontsize=12)
+    else:
+        ax.set_xlabel('Easting (m)', fontsize=12)
+        ax.set_ylabel('Northing (m)', fontsize=12)
+    
+    # Add grid
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Set aspect ratio to equal to avoid distortion
+    ax.set_aspect('equal', adjustable='box')
+    
+    # Format tick labels
+    ax.ticklabel_format(useOffset=False, style='plain')
+    
+    # Add a text box with statistics
+    stats_text = f"Total grids: {len(grid_info)}\n"
+    if target_crs == 'EPSG:4326':
+        stats_text += f"Area: {(east-west):.2f}° × {(north-south):.2f}°"
+    else:
+        stats_text += f"Area: {(east-west)/1000:.1f} × {(north-south)/1000:.1f} km"
+    
+    # Place text box in upper right
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+    ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', horizontalalignment='right', bbox=props)
+    
+    # Add legend if there are few enough grids (optional)
+    if len(grid_info) <= 20:
+        ax.legend(loc='upper left', bbox_to_anchor=(1.01, 1), ncol=1, 
+                 fontsize=8, title="Grid Names")
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    # Save the figure
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"Grid boundaries visualization saved to: {output_path}")
+    
+    # Show plot
+    plt.show()
+
 def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateline_tiles=True, 
          force_projected=True, output_dir=None, output_repr_format='tiff'):
     """
@@ -714,7 +952,7 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
     """
     # Set paths
     if base_dir is None:
-        base_dir = "/scratch/zf281/btfm_representation/senegal/2024"
+        base_dir = "/scratch/zf281/btfm_representation/senegal/2017"
     
     # Set output directory
     if output_dir is None:
@@ -829,17 +1067,21 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         
         print(f"Multi-band {output_repr_format.upper()} saved to: {output_path}")
         
-        # Step 3: Create RGB visualization
+        # Step 3: Create RGB visualization with dequantization
         print("\nStep 3: Creating RGB visualization...")
+        
+        # Check if scales file exists
+        has_scales_for_viz = os.path.exists(scales_output_path)
+        if not has_scales_for_viz:
+            print("Warning: No scales file found for visualization. Using raw int8 values.")
         
         # Read data for visualization
         if output_repr_format == 'tiff':
             with rasterio.open(output_path) as src:
-                rgb_array = np.zeros((src.height, src.width, 3), dtype=np.uint8)
+                # Read RGB bands as int8
+                rgb_int8 = np.zeros((src.height, src.width, 3), dtype=np.int8)
                 for i in range(min(3, num_bands)):
-                    band_data = src.read(i + 1)
-                    # Convert from int8 to uint8 for visualization
-                    rgb_array[:, :, i] = ((band_data.astype(np.float32) + 127.0) * (255.0 / 254.0)).astype(np.uint8)
+                    rgb_int8[:, :, i] = src.read(i + 1)
                 
                 # Get transform and metadata
                 transform = src.transform
@@ -849,19 +1091,48 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         else:  # npy format
             data = np.load(output_path, mmap_mode='r')
             height, width, _ = data.shape
-            rgb_array = np.zeros((height, width, 3), dtype=np.uint8)
-            for i in range(min(3, num_bands)):
-                # Convert from int8 to uint8 for visualization
-                rgb_array[:, :, i] = ((data[:, :, i].astype(np.float32) + 127.0) * (255.0 / 254.0)).astype(np.uint8)
-            
-            # Calculate transform from known information
-            # This is approximate since we don't have the exact georeferencing from NPY
-            # You might want to save georeferencing info separately
-            west = -180  # Default values, you should calculate these properly
-            north = 90
-            east = 180
-            south = -90
+            # Read first 3 bands as int8
+            rgb_int8 = data[:, :, :3].copy()
             crs = target_crs
+        
+        # Dequantize if scales are available
+        if has_scales_for_viz:
+            print("Dequantizing RGB bands using scales...")
+            scales_data = np.load(scales_output_path, mmap_mode='r')
+            
+            # Dequantize RGB bands
+            rgb_f32 = load_and_dequantize_representation(rgb_int8, scales_data)
+            
+            # Convert to uint8 for visualization
+            # First, find the min and max values to normalize
+            rgb_array = np.zeros((height, width, 3), dtype=np.uint8)
+            for i in range(3):
+                band_data = rgb_f32[:, :, i]
+                # Normalize to 0-255 range
+                # Handle potential NaN or Inf values
+                valid_mask = np.isfinite(band_data) & (band_data != 0)
+                if np.any(valid_mask):
+                    band_min = np.min(band_data[valid_mask])
+                    band_max = np.max(band_data[valid_mask])
+                    if band_max > band_min:
+                        # Normalize and clip
+                        normalized = (band_data - band_min) / (band_max - band_min) * 255
+                        normalized = np.clip(normalized, 0, 255)
+                        rgb_array[:, :, i] = normalized.astype(np.uint8)
+                    else:
+                        # Constant value
+                        rgb_array[:, :, i] = 128
+                else:
+                    # No valid data
+                    rgb_array[:, :, i] = 0
+            
+            print("Dequantization complete.")
+        else:
+            # No scales available, convert int8 to uint8 directly
+            rgb_array = np.zeros((height, width, 3), dtype=np.uint8)
+            for i in range(3):
+                # Convert from int8 to uint8 for visualization
+                rgb_array[:, :, i] = ((rgb_int8[:, :, i].astype(np.float32) + 127.0) * (255.0 / 254.0)).astype(np.uint8)
         
         # Calculate extent based on CRS type
         if output_repr_format == 'tiff':
@@ -869,6 +1140,13 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
             north = transform.f
             east = west + transform.a * width
             south = north + transform.e * height
+        else:
+            # For NPY format without georeferencing, use approximate bounds
+            # This is a limitation - ideally save georeferencing separately
+            west = -180
+            north = 90
+            east = 180
+            south = -90
         
         # Create figure
         fig, ax = plt.subplots(figsize=(20, 15))
@@ -879,6 +1157,8 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         
         # Set title and labels based on CRS
         title = f'{location_name.title()} Map Visualization ({resolution}m resolution, {target_crs})'
+        if has_scales_for_viz:
+            title += ' - Dequantized'
         if filter_suffix:
             title += ' - Dateline Filtered'
         ax.set_title(title, fontsize=16)
@@ -899,7 +1179,8 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         plt.tight_layout()
         
         # Save image
-        output_png = os.path.join(output_dir, f"{location_name}_map_{resolution}m_{crs_name}_{bands_suffix}{filter_suffix}.png")
+        viz_suffix = "_dequantized" if has_scales_for_viz else ""
+        output_png = os.path.join(output_dir, f"{location_name}_map_{resolution}m_{crs_name}_{bands_suffix}{filter_suffix}{viz_suffix}.png")
         plt.savefig(output_png, dpi=300, bbox_inches='tight')
         print(f"RGB visualization saved to: {output_png}")
         
@@ -910,6 +1191,7 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         print(f"  - Resolution: {resolution}m")
         print(f"  - CRS: {target_crs}")
         print(f"  - Output format: {output_repr_format}")
+        print(f"  - Visualization: {'Dequantized' if has_scales_for_viz else 'Raw int8 converted to uint8'}")
         
         if output_repr_format == 'tiff' and target_crs == 'EPSG:4326':
             print(f"  - Geographic bounds: {west:.6f}°, {south:.6f}°, {east:.6f}°, {north:.6f}°")
@@ -942,6 +1224,18 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
         
         plt.show()
         
+        # Step 4: Create grid boundaries visualization
+        print("\nStep 4: Creating grid boundaries visualization...")
+        
+        boundaries_output_path = os.path.join(output_dir, 
+            f"{location_name}_grid_boundaries_{resolution}m_{crs_name}_{bands_suffix}{filter_suffix}.png")
+        
+        create_grid_boundaries_visualization(
+            tiff_info, target_crs, resolution, boundaries_output_path,
+            location_name, crs_name, bands_suffix, filter_suffix,
+            filter_cross_dateline_tiles=filter_cross_dateline_tiles
+        )
+        
     finally:
         # Clean up temporary files
         print("\nCleaning up temporary files...")
@@ -950,11 +1244,11 @@ def main(base_dir=None, downsample_factor=1, rgb_only=False, filter_cross_dateli
 if __name__ == "__main__":
     # The code will automatically determine the best projection
     main(
-        base_dir="/scratch/zf281/btfm_representation/senegal/representation/2021", 
-        output_dir="/scratch/zf281/btfm_representation/senegal/representation",
+        base_dir="/maps/zf281/btfm4rs/data/downstream/pv_detection/roi_1/2024", 
+        output_dir="/maps/zf281/btfm4rs/data/downstream/pv_detection/roi_1",
         downsample_factor=1, # 1 means no downsampling (10m resolution)
         rgb_only=False, # For quick testing, set to True to only use RGB bands. If False, it will use all 128 bands.
         filter_cross_dateline_tiles=True,  # This will filter out those tiles which cross the dateline
         force_projected=True,  # This ensures we use UTM instead of WGS84
-        output_repr_format='tiff',  # Can be 'tiff' or 'npy'. Usually 'npy' mode is much faster...
+        output_repr_format='npy',  # Can be 'tiff' or 'npy'. Usually 'npy' mode is much faster...
     )

@@ -16,3 +16,15 @@ david_cci_workshop_and_maddy_roi/
 grid_analysis_output/
 frankfeng1223/
 src/tile_lists/
+.trae
+.vscode
+cci_workshop_roi_shp/
+cci_workshop_roi_txt/
+src/pv_detection/cache
+src/pv_detection/cnn_cache
+src/pv_detection/cnn_models
+src/pv_detection/dodgy_grids
+22kgb.prj
+*.npy
+*.pkl
+*.svg

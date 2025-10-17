@@ -40,5 +40,7 @@ config = {
     "num_workers": 0,
     "latent_dim": 128,
     "projector_hidden_dim": 8192*4,
-    "projector_out_dim": 8192*4
+    "projector_out_dim": 8192*4,
+    "max_s2_obs": 1,  # 最大哨兵2观测数量
+    "max_s1_obs": 100   # 最大哨兵1观测数量（升轨+降轨）
 }

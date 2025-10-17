@@ -56,15 +56,17 @@ logger.addHandler(handler)
 class OptimizedGridDownloader:
     """Optimized class for downloading grid data based on shapefile intersection"""
     
-    def __init__(self, hostname, username):
+    def __init__(self, hostnames=None, username=None):
         """
         Initialize the downloader
         
         Args:
-            hostname: Remote server address
+            hostnames: List of remote server addresses, defaults to ['myrina.cl.cam.ac.uk', 'antiope.cl.cam.ac.uk']
             username: SSH username
         """
-        self.hostname = hostname
+        if hostnames is None:
+            hostnames = ['myrina.cl.cam.ac.uk', 'antiope.cl.cam.ac.uk']
+        self.hostnames = hostnames
         self.username = username
         self.remote_tiff_path = "/tank/zf281/global_0.1_degree_tiff_all"
         self.remote_data_base = "/tank/zf281/global_0.1_degree_representation"
@@ -191,86 +193,177 @@ class OptimizedGridDownloader:
         
     def check_remote_grids_exist(self, grids, years):
         """
-        Check which grid/year combinations exist on remote server
+        Check which grid/year combinations exist on remote servers
         
         Args:
             grids: List of (lon, lat) tuples
             years: List of years
             
         Returns:
-            dict: Mapping of year to list of existing grids
+            dict: Mapping of server -> year -> list of existing grids
         """
-        logger.info("Checking which grids exist on remote server...")
+        logger.info("Checking which grids exist on remote servers...")
         
-        existing_grids = {}
-        total_checks = len(years) * len(grids)
+        server_grids = {}
+        total_checks = len(years) * len(grids) * len(self.hostnames)
         
         with tqdm(total=total_checks, desc="Checking remote grids") as pbar:
-            for year in years:
-                existing_grids[year] = []
+            for hostname in self.hostnames:
+                server_grids[hostname] = {}
+                logger.info(f"Checking server: {hostname}")
                 
-                # Build SSH command to check multiple grids at once
-                grid_names = [f"grid_{lon}_{lat}" for lon, lat in grids]
-                
-                # Create a command that checks all grids for this year
-                remote_year_path = f"{self.remote_data_base}/{year}"
-                
-                # Split grid names into smaller batches to avoid command line length limits
-                batch_size = 50
-                for i in range(0, len(grid_names), batch_size):
-                    batch = grid_names[i:i+batch_size]
-                    check_cmd = f"cd {remote_year_path} 2>/dev/null && ls -d {' '.join(batch)} 2>/dev/null || true"
+                for year in years:
+                    server_grids[hostname][year] = []
                     
-                    ssh_cmd = [
-                        'ssh',
-                        f'{self.username}@{self.hostname}',
-                        check_cmd
-                    ]
+                    # Build SSH command to check multiple grids at once
+                    grid_names = [f"grid_{lon}_{lat}" for lon, lat in grids]
                     
-                    try:
-                        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
-                        if result.returncode == 0 and result.stdout:
-                            # Parse existing grids from output
-                            for line in result.stdout.strip().split('\n'):
-                                if line.startswith('grid_'):
-                                    # Extract coordinates from grid name
-                                    match = re.match(r'grid_(-?\d+\.?\d*)_(-?\d+\.?\d*)', line)
-                                    if match:
-                                        lon, lat = match.groups()
-                                        existing_grids[year].append((lon, lat))
-                                        
-                    except subprocess.TimeoutExpired:
-                        logger.warning(f"Timeout checking grids for year {year}")
-                    except Exception as e:
-                        logger.warning(f"Error checking grids for year {year}: {e}")
+                    # Create a command that checks all grids for this year
+                    remote_year_path = f"{self.remote_data_base}/{year}"
                     
-                pbar.update(len(grids))
-                
+                    # Split grid names into smaller batches to avoid command line length limits
+                    batch_size = 50
+                    for i in range(0, len(grid_names), batch_size):
+                        batch = grid_names[i:i+batch_size]
+                        check_cmd = f"cd {remote_year_path} 2>/dev/null && ls -d {' '.join(batch)} 2>/dev/null || true"
+                        
+                        ssh_cmd = [
+                            'ssh',
+                            f'{self.username}@{hostname}',
+                            check_cmd
+                        ]
+                        
+                        try:
+                            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
+                            if result.returncode == 0 and result.stdout:
+                                # Parse existing grids from output
+                                for line in result.stdout.strip().split('\n'):
+                                    if line.startswith('grid_'):
+                                        # Extract coordinates from grid name
+                                        match = re.match(r'grid_(-?\d+\.?\d*)_(-?\d+\.?\d*)', line)
+                                        if match:
+                                            lon, lat = match.groups()
+                                            server_grids[hostname][year].append((lon, lat))
+                                            
+                        except subprocess.TimeoutExpired:
+                            logger.warning(f"Timeout checking grids for year {year} on {hostname}")
+                        except Exception as e:
+                            logger.warning(f"Error checking grids for year {year} on {hostname}: {e}")
+                        
+                    pbar.update(len(grids))
+                    
         # Summary
-        total_existing = sum(len(grids) for grids in existing_grids.values())
-        logger.info(f"Found {total_existing} existing grid/year combinations")
-        
-        # Debug: show some existing grids
-        for year, grids in existing_grids.items():
-            if grids:
-                logger.debug(f"Year {year}: Found {len(grids)} grids (first few: {grids[:3]})")
-        
-        return existing_grids
-        
-    def download_tiff_files(self, existing_grids, output_base):
+        for hostname in self.hostnames:
+            total_existing = sum(len(grids) for grids in server_grids[hostname].values())
+            logger.info(f"Server {hostname}: Found {total_existing} existing grid/year combinations")
+    def get_file_mtime_ssh(self, remote_path, hostname):
+        """Get modification time of remote file via SSH"""
+        try:
+            ssh_cmd = [
+                'ssh',
+                f'{self.username}@{hostname}',
+                f'stat -c %Y "{remote_path}" 2>/dev/null || echo "0"'
+            ]
+            
+            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                return float(result.stdout.strip())
+            return 0
+        except:
+            return 0
+            
+    def find_best_server_for_grid(self, year, lon, lat, server_grids):
         """
-        Download TIFF files for all grids
+        Find the best server for a specific grid by comparing modification times
         
         Args:
-            existing_grids: Dict mapping year to list of (lon, lat) tuples
+            year: Year to check
+            lon, lat: Grid coordinates
+            server_grids: Dict mapping server -> year -> list of grids
+            
+        Returns:
+            str: Best hostname or None if not found on any server
+        """
+        best_server = None
+        latest_mtime = 0
+        
+        grid_tuple = (str(lon), str(lat))
+        remote_grid_path = f"{self.remote_data_base}/{year}/grid_{lon}_{lat}"
+        
+        for hostname in self.hostnames:
+            # Check if this server has data and the specific year/grid exists
+            if (hostname in server_grids and 
+                server_grids[hostname] and 
+                year in server_grids[hostname] and 
+                grid_tuple in server_grids[hostname][year]):
+                
+                mtime = self.get_file_mtime_ssh(remote_grid_path, hostname)
+                if mtime > latest_mtime:
+                    latest_mtime = mtime
+                    best_server = hostname
+                    
+        return best_server
+        
+    def consolidate_grids_by_best_server(self, server_grids):
+        """
+        Consolidate grids by selecting the best server for each grid/year combination
+        
+        Args:
+            server_grids: Dict mapping server -> year -> list of grids
+            
+        Returns:
+            dict: Mapping of server -> year -> list of grids (optimized)
+        """
+        logger.info("Consolidating grids by selecting best servers...")
+        
+        # Create consolidated structure
+        consolidated = {hostname: {} for hostname in self.hostnames}
+        
+        # Get all unique year/grid combinations
+        all_combinations = set()
+        for hostname in self.hostnames:
+            if hostname in server_grids and server_grids[hostname]:
+                for year, grids in server_grids[hostname].items():
+                    if grids:  # Only add if grids list is not empty
+                        for lon, lat in grids:
+                            all_combinations.add((year, lon, lat))
+        
+        # For each combination, find the best server
+        for year, lon, lat in tqdm(all_combinations, desc="Finding best servers for grids"):
+            best_server = self.find_best_server_for_grid(year, lon, lat, server_grids)
+            if best_server:
+                if year not in consolidated[best_server]:
+                    consolidated[best_server][year] = []
+                consolidated[best_server][year].append((lon, lat))
+                
+        # Remove empty entries
+        final_consolidated = {}
+        for hostname in self.hostnames:
+            if consolidated[hostname] and any(consolidated[hostname].values()):
+                final_consolidated[hostname] = {year: grids for year, grids in consolidated[hostname].items() if grids}
+                
+        # Summary
+        for hostname, years_data in final_consolidated.items():
+            total_grids = sum(len(grids) for grids in years_data.values())
+            logger.info(f"Server {hostname}: {total_grids} grids selected as best source")
+            
+        return final_consolidated
+        
+    def download_tiff_files(self, consolidated_grids, output_base):
+        """
+        Download TIFF files for all grids from their respective best servers
+        
+        Args:
+            consolidated_grids: Dict mapping server -> year -> list of grids
             output_base: Base output directory
         """
         logger.info("Downloading TIFF files...")
         
-        # Get unique grids across all years
+        # Get unique grids across all servers and years
         unique_grids = set()
-        for grids in existing_grids.values():
-            unique_grids.update(grids)
+        for hostname_data in consolidated_grids.values():
+            for grids in hostname_data.values():
+                unique_grids.update(grids)
         
         if not unique_grids:
             logger.warning("No grids to download TIFF files for!")
@@ -278,207 +371,231 @@ class OptimizedGridDownloader:
             
         logger.info(f"Downloading TIFF files for {len(unique_grids)} unique grids")
         
-        # Create temporary directory for file lists
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create file list for TIFF files
-            file_list_path = os.path.join(temp_dir, "tiff_files.txt")
+        # Group grids by server for TIFF downloads
+        server_tiff_grids = {}
+        for hostname, years_data in consolidated_grids.items():
+            grids_for_server = set()
+            for grids in years_data.values():
+                grids_for_server.update(grids)
+            if grids_for_server:
+                server_tiff_grids[hostname] = list(grids_for_server)
+        
+        # Download TIFF files from each server
+        for hostname, grids in server_tiff_grids.items():
+            logger.info(f"Downloading {len(grids)} TIFF files from {hostname}")
             
-            # Map to store which years each grid appears in
-            grid_to_years = {}
-            for year, grids in existing_grids.items():
-                for lon, lat in grids:
-                    if (lon, lat) not in grid_to_years:
-                        grid_to_years[(lon, lat)] = []
-                    grid_to_years[(lon, lat)].append(year)
-            
-            # Write TIFF file names to list
-            with open(file_list_path, 'w') as f:
-                for lon, lat in unique_grids:
-                    f.write(f"grid_{lon}_{lat}.tiff\n")
-            
-            # Download all TIFF files to a temporary location first
-            temp_tiff_dir = os.path.join(temp_dir, "tiffs")
-            os.makedirs(temp_tiff_dir, exist_ok=True)
-            
-            # Construct rsync command
-            source = f"{self.username}@{self.hostname}:{self.remote_tiff_path}/"
-            
-            rsync_cmd = [
-                'rsync',
-                '-avz',  # archive, verbose, compress
-                '--no-group',  # don't preserve group ownership
-                '--files-from', file_list_path,
-                source,
-                temp_tiff_dir
-            ]
-            
-            # Execute rsync
-            try:
-                logger.info(f"Running rsync for TIFF files...")
+            # Create temporary directory for file lists
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Create file list for TIFF files
+                file_list_path = os.path.join(temp_dir, "tiff_files.txt")
                 
-                process = subprocess.Popen(
-                    rsync_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
+                # Write TIFF file names to list
+                with open(file_list_path, 'w') as f:
+                    for lon, lat in grids:
+                        f.write(f"grid_{lon}_{lat}.tiff\n")
                 
-                # Process output in real-time
-                tiff_count = 0
-                while True:
-                    output = process.stdout.readline()
-                    if output == '' and process.poll() is not None:
-                        break
-                    if output and '.tiff' in output:
-                        match = re.search(r'grid_-?\d+\.?\d*_-?\d+\.?\d*\.tiff', output)
-                        if match:
-                            tiff_count += 1
-                            if tiff_count <= 5:
-                                tqdm.write(f"  ✓ Downloaded TIFF: {match.group()}")
+                # Download all TIFF files to a temporary location first
+                temp_tiff_dir = os.path.join(temp_dir, "tiffs")
+                os.makedirs(temp_tiff_dir, exist_ok=True)
                 
-                # Wait for process to complete
-                process.wait()
+                # Construct rsync command
+                source = f"{self.username}@{hostname}:{self.remote_tiff_path}/"
                 
-                if process.returncode != 0:
-                    stderr = process.stderr.read()
-                    if process.returncode == 23 and "some files/attrs were not transferred" in stderr:
-                        logger.warning("TIFF files transferred but with permission warnings (this is usually harmless)")
-                    else:
-                        logger.error(f"rsync failed for TIFF files: {stderr}")
-                        return
+                rsync_cmd = [
+                    'rsync',
+                    '-avz',  # archive, verbose, compress
+                    '--no-group',  # don't preserve group ownership
+                    '--files-from', file_list_path,
+                    source,
+                    temp_tiff_dir
+                ]
                 
-                if tiff_count > 5:
-                    tqdm.write(f"  ... and {tiff_count - 5} more TIFF files")
+                # Execute rsync
+                try:
+                    logger.info(f"Running rsync for TIFF files from {hostname}...")
                     
-                # Now copy TIFF files to their respective grid folders
-                logger.info("Copying TIFF files to grid folders...")
-                
-                with tqdm(total=sum(len(years) for years in grid_to_years.values()), 
-                         desc="Copying TIFF files") as pbar:
-                    for (lon, lat), years in grid_to_years.items():
-                        tiff_filename = f"grid_{lon}_{lat}.tiff"
-                        source_tiff = os.path.join(temp_tiff_dir, tiff_filename)
-                        
-                        if os.path.exists(source_tiff):
-                            # Copy to each year directory where this grid exists
-                            for year in years:
-                                dest_dir = os.path.join(output_base, str(year), f"grid_{lon}_{lat}")
-                                if os.path.exists(dest_dir):
-                                    dest_tiff = os.path.join(dest_dir, tiff_filename)
-                                    shutil.copy2(source_tiff, dest_tiff)
-                                    pbar.update(1)
+                    process = subprocess.Popen(
+                        rsync_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    
+                    # Process output in real-time
+                    tiff_count = 0
+                    while True:
+                        output = process.stdout.readline()
+                        if output == '' and process.poll() is not None:
+                            break
+                        if output and '.tiff' in output:
+                            match = re.search(r'grid_-?\d+\.?\d*_-?\d+\.?\d*\.tiff', output)
+                            if match:
+                                tiff_count += 1
+                                if tiff_count <= 3:
+                                    tqdm.write(f"  ✓ Downloaded TIFF from {hostname}: {match.group()}")
+                    
+                    # Wait for process to complete
+                    process.wait()
+                    
+                    if process.returncode != 0:
+                        stderr = process.stderr.read()
+                        if process.returncode == 23 and "some files/attrs were not transferred" in stderr:
+                            logger.warning(f"TIFF files transferred from {hostname} but with permission warnings")
                         else:
-                            logger.warning(f"TIFF file not found: {tiff_filename}")
-                            pbar.update(len(years))
+                            logger.error(f"rsync failed for TIFF files from {hostname}: {stderr}")
+                            continue
+                    
+                    if tiff_count > 3:
+                        tqdm.write(f"  ... and {tiff_count - 3} more TIFF files from {hostname}")
+                        
+                    # Now copy TIFF files to their respective grid folders
+                    logger.info(f"Copying TIFF files from {hostname} to grid folders...")
+                    
+                    # Map grids to their years for this server
+                    grid_to_years = {}
+                    for year, year_grids in consolidated_grids[hostname].items():
+                        for lon, lat in year_grids:
+                            if (lon, lat) not in grid_to_years:
+                                grid_to_years[(lon, lat)] = []
+                            grid_to_years[(lon, lat)].append(year)
+                    
+                    with tqdm(total=sum(len(years) for years in grid_to_years.values()), 
+                             desc=f"Copying TIFF files from {hostname}") as pbar:
+                        for (lon, lat), years in grid_to_years.items():
+                            tiff_filename = f"grid_{lon}_{lat}.tiff"
+                            source_tiff = os.path.join(temp_tiff_dir, tiff_filename)
                             
-            except Exception as e:
-                logger.error(f"Error downloading TIFF files: {e}")
+                            if os.path.exists(source_tiff):
+                                # Copy to each year directory where this grid exists
+                                for year in years:
+                                    dest_dir = os.path.join(output_base, str(year), f"grid_{lon}_{lat}")
+                                    if os.path.exists(dest_dir):
+                                        dest_tiff = os.path.join(dest_dir, tiff_filename)
+                                        shutil.copy2(source_tiff, dest_tiff)
+                                        pbar.update(1)
+                            else:
+                                logger.warning(f"TIFF file not found: {tiff_filename}")
+                                pbar.update(len(years))
+                                
+                except Exception as e:
+                    logger.error(f"Error downloading TIFF files from {hostname}: {e}")
                 
-    def download_with_rsync(self, existing_grids, output_base):
+    def download_with_rsync(self, consolidated_grids, output_base):
         """
-        Download grids using rsync for better performance
+        Download grids using rsync from multiple servers for better performance
         
         Args:
-            existing_grids: Dict mapping year to list of (lon, lat) tuples
+            consolidated_grids: Dict mapping server -> year -> list of grids
             output_base: Base output directory
         """
-        logger.info("Starting rsync download process...")
+        logger.info("Starting multi-server rsync download process...")
         logger.info("Note: Using --no-group flag to avoid permission errors")
         
         # Create output directory
         os.makedirs(output_base, exist_ok=True)
         
         # Count total grids to download
-        total_grids = sum(len(grids) for grids in existing_grids.values())
+        total_grids = sum(sum(len(grids) for grids in server_data.values()) 
+                         for server_data in consolidated_grids.values())
         
         if total_grids == 0:
             logger.warning("No grids to download!")
             return
             
+        logger.info(f"Downloading {total_grids} grids from {len(consolidated_grids)} servers")
+        
         # Create temporary directory for file lists
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download each year separately
+            # Download from each server separately
             downloaded_count = 0
             with tqdm(total=total_grids, desc="Downloading grids") as pbar:
-                for year, grids in existing_grids.items():
-                    if not grids:
+                for hostname, years_data in consolidated_grids.items():
+                    if not years_data:
                         continue
                         
-                    logger.info(f"Downloading {len(grids)} grids for year {year}")
+                    server_total = sum(len(grids) for grids in years_data.values())
+                    logger.info(f"Downloading {server_total} grids from {hostname}")
                     
-                    # Create file list for this year
-                    file_list_path = os.path.join(temp_dir, f"files_{year}.txt")
-                    with open(file_list_path, 'w') as f:
-                        for lon, lat in grids:
-                            # Write relative path from year directory
-                            f.write(f"grid_{lon}_{lat}/\n")
-                    
-                    # Construct rsync command
-                    source = f"{self.username}@{self.hostname}:{self.remote_data_base}/{year}/"
-                    target = os.path.join(output_base, str(year))
-                    
-                    rsync_cmd = [
-                        'rsync',
-                        '-avz',  # archive, verbose, compress
-                        '--no-group',  # don't preserve group ownership
-                        '--files-from', file_list_path,
-                        source,
-                        target
-                    ]
-                    
-                    # Create target directory
-                    os.makedirs(target, exist_ok=True)
-                    
-                    # Execute rsync
-                    try:
-                        logger.debug(f"Running rsync (without group preservation): {' '.join(rsync_cmd)}")
-                        
-                        # Run rsync and capture output
-                        process = subprocess.Popen(
-                            rsync_cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True
-                        )
-                        
-                        # Process output in real-time
-                        grid_count_this_year = 0
-                        while True:
-                            output = process.stdout.readline()
-                            if output == '' and process.poll() is not None:
-                                break
-                            if output and 'grid_' in output:
-                                # Extract grid name from output - look for directory transfers
-                                match = re.search(r'(grid_-?\d+\.?\d*_-?\d+\.?\d*)/?', output)
-                                if match:
-                                    grid_count_this_year += 1
-                                    if grid_count_this_year <= 5:  # Show first 5 for each year
-                                        tqdm.write(f"  ✓ Downloaded: {year}/{match.group(1)}")
-                                    pbar.update(1)
-                                    downloaded_count += 1
-                        
-                        # Wait for process to complete
-                        process.wait()
-                        
-                        # Check for errors
-                        if process.returncode != 0:
-                            stderr = process.stderr.read()
-                            # Check if it's just permission errors (code 23) with successful transfers
-                            if process.returncode == 23 and "some files/attrs were not transferred" in stderr:
-                                logger.warning(f"Files transferred for year {year} but with permission warnings (this is usually harmless)")
-                                if grid_count_this_year > 5:
-                                    tqdm.write(f"  ... and {grid_count_this_year - 5} more grids for year {year}")
-                            else:
-                                logger.error(f"rsync failed for year {year}: {stderr}")
-                        else:
-                            if grid_count_this_year > 5:
-                                tqdm.write(f"  ... and {grid_count_this_year - 5} more grids for year {year}")
+                    # Download each year separately for this server
+                    for year, grids in years_data.items():
+                        if not grids:
+                            continue
                             
-                    except Exception as e:
-                        logger.error(f"Error downloading year {year}: {e}")
+                        logger.info(f"Downloading {len(grids)} grids for year {year} from {hostname}")
+                        
+                        # Create file list for this year
+                        file_list_path = os.path.join(temp_dir, f"files_{hostname}_{year}.txt")
+                        with open(file_list_path, 'w') as f:
+                            for lon, lat in grids:
+                                # Write relative path from year directory
+                                f.write(f"grid_{lon}_{lat}/\n")
+                        
+                        # Construct rsync command
+                        source = f"{self.username}@{hostname}:{self.remote_data_base}/{year}/"
+                        target = os.path.join(output_base, str(year))
+                        
+                        rsync_cmd = [
+                            'rsync',
+                            '-avz',  # archive, verbose, compress
+                            '--no-group',  # don't preserve group ownership
+                            '--files-from', file_list_path,
+                            source,
+                            target
+                        ]
+                        
+                        # Create target directory
+                        os.makedirs(target, exist_ok=True)
+                        
+                        # Execute rsync
+                        try:
+                            logger.debug(f"Running rsync from {hostname}: {' '.join(rsync_cmd)}")
+                            
+                            # Run rsync and capture output
+                            process = subprocess.Popen(
+                                rsync_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True
+                            )
+                            
+                            # Process output in real-time
+                            grid_count_this_batch = 0
+                            while True:
+                                output = process.stdout.readline()
+                                if output == '' and process.poll() is not None:
+                                    break
+                                if output and 'grid_' in output:
+                                    # Extract grid name from output - look for directory transfers
+                                    match = re.search(r'(grid_-?\d+\.?\d*_-?\d+\.?\d*)/?', output)
+                                    if match:
+                                        grid_count_this_batch += 1
+                                        if grid_count_this_batch <= 3:  # Show first 3 for each batch
+                                            tqdm.write(f"  ✓ Downloaded from {hostname}: {year}/{match.group(1)}")
+                                        pbar.update(1)
+                                        downloaded_count += 1
+                            
+                            # Wait for process to complete
+                            process.wait()
+                            
+                            # Check for errors
+                            if process.returncode != 0:
+                                stderr = process.stderr.read()
+                                # Check if it's just permission errors (code 23) with successful transfers
+                                if process.returncode == 23 and "some files/attrs were not transferred" in stderr:
+                                    logger.warning(f"Files transferred for year {year} from {hostname} but with permission warnings")
+                                    if grid_count_this_batch > 3:
+                                        tqdm.write(f"  ... and {grid_count_this_batch - 3} more grids for year {year} from {hostname}")
+                                else:
+                                    logger.error(f"rsync failed for year {year} from {hostname}: {stderr}")
+                            else:
+                                if grid_count_this_batch > 3:
+                                    tqdm.write(f"  ... and {grid_count_this_batch - 3} more grids for year {year} from {hostname}")
+                                
+                        except Exception as e:
+                            logger.error(f"Error downloading year {year} from {hostname}: {e}")
         
         # Now download TIFF files
-        self.download_tiff_files(existing_grids, output_base)
+        self.download_tiff_files(consolidated_grids, output_base)
                         
         logger.info(f"Download process completed! Total grids downloaded: {downloaded_count}")
         
@@ -493,9 +610,9 @@ Example usage:
     
     /maps/zf281/miniconda3/envs/detectree-env/bin/python \
     /maps/zf281/btfm4rs/src/utils/fetch_representations_from_shp.py \
-    /maps/zf281/btfm4rs/david_cci_workshop_and_maddy_roi/borneo.shp \
-    -y 2020 \
-    -o /scratch/zf281/btfm_representation/borneo
+    /maps/zf281/btfm4rs/cci_workshop_roi_shp/Rudiyanto_Malaysia.shp \
+    -o /maps/zf281/btfm4rs/data/external-request/Malaysia \
+    -y 2024
     """
     )
     
@@ -503,8 +620,8 @@ Example usage:
     parser.add_argument('-o', '--output', required=True, help='Output directory path')
     parser.add_argument('-y', '--years', nargs='+', type=int, required=True,
                         help='Years to download (e.g., 2023 2024)')
-    parser.add_argument('--hostname', default='antiope.cl.cam.ac.uk',
-                        help='Remote server hostname (default: antiope.cl.cam.ac.uk)')
+    parser.add_argument('--hostname', default=None,
+                        help='Remote server hostname (default: use both myrina and antiope)')
     parser.add_argument('--username', default='zf281',
                         help='SSH username (default: zf281)')
     parser.add_argument('--buffer', type=float, default=0.1,
@@ -532,8 +649,9 @@ Example usage:
     start_time = time.time()
     
     # Create downloader instance
+    hostnames = [args.hostname] if args.hostname else None
     downloader = OptimizedGridDownloader(
-        hostname=args.hostname,
+        hostnames=hostnames,
         username=args.username
     )
     
@@ -558,13 +676,16 @@ Example usage:
                 f.write(f"grid_{lon}_{lat}\n")
         logger.info(f"Saved grid list to: {grid_list_file}")
         
-        # Check which grids exist on remote server
-        existing_grids = downloader.check_remote_grids_exist(
+        # Check which grids exist on remote servers
+        server_grids = downloader.check_remote_grids_exist(
             intersecting_grids, args.years
         )
         
+        # Consolidate grids by best server
+        consolidated_grids = downloader.consolidate_grids_by_best_server(server_grids)
+        
         # Download using rsync
-        downloader.download_with_rsync(existing_grids, args.output)
+        downloader.download_with_rsync(consolidated_grids, args.output)
         
         # Calculate elapsed time
         elapsed_time = time.time() - start_time
@@ -573,7 +694,8 @@ Example usage:
         logger.info("="*60)
         logger.info("DOWNLOAD COMPLETE")
         logger.info("="*60)
-        total_downloaded = sum(len(grids) for grids in existing_grids.values())
+        total_downloaded = sum(sum(len(grids) for grids in server_data.values()) 
+                              for server_data in consolidated_grids.values())
         logger.info(f"Total grids downloaded: {total_downloaded}")
         logger.info(f"Output directory: {args.output}")
         logger.info(f"Total execution time: {elapsed_time:.2f} seconds")

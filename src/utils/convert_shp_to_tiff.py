@@ -261,7 +261,7 @@ def main():
     主函数，运行转换过程
     """
     # 输入shapefile路径
-    shp_path = '/scratch/zf281/downstream_dataset/jovana/tile_1/tile_10x10_extent.shp'
+    shp_path = '/maps/zf281/btfm4rs/cci_workshop_roi_shp/pv_roi1.shp'
     
     # 调用转换函数
     try:

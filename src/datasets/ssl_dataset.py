@@ -252,14 +252,19 @@ class SingleTileInferenceDataset(Dataset):
     def __init__(self,
                  tile_path,
                  min_valid_timesteps=10,
-                 standardize=True):
+                 standardize=True,
+                 max_s2_obs=None,
+                 max_s1_obs=None):
         super().__init__()
         
         # self.tile_path = tile_path
         # 加一个/data_processed后缀
-        self.tile_path = os.path.join(tile_path, "data_processed")
+        # self.tile_path = os.path.join(tile_path, "data_processed")
+        self.tile_path = tile_path
         self.min_valid_timesteps = min_valid_timesteps
         self.standardize = standardize
+        self.max_s2_obs = max_s2_obs
+        self.max_s1_obs = max_s1_obs
 
         # 加载 S2
         s2_bands_path = os.path.join(self.tile_path, "bands.npy")    # (t_s2, H, W, 10)
@@ -287,6 +292,9 @@ class SingleTileInferenceDataset(Dataset):
 
         # 形状
         self.t_s2, self.H, self.W, _ = self.s2_bands.shape
+
+        # 应用智能时间步选择逻辑
+        self._apply_intelligent_timestep_selection()
 
         self.s2_band_mean = S2_BAND_MEAN
         self.s2_band_std = S2_BAND_STD
@@ -321,6 +329,108 @@ class SingleTileInferenceDataset(Dataset):
                 self.valid_pixels.append((idx, i, j))
 
         logging.info(f"[SingleTileInferenceDataset] tile={tile_path}, total_valid_pixels={len(self.valid_pixels)}")
+
+    def _apply_intelligent_timestep_selection(self):
+        """应用智能时间步选择逻辑，与训练阶段保持一致"""
+        
+        # S2智能抛弃逻辑
+        if self.max_s2_obs is not None and self.s2_bands.shape[0] > self.max_s2_obs:
+            logging.info(f"S2观测数量超过阈值{self.max_s2_obs}，基于云覆盖率进行智能抛弃")
+            
+            # 计算每个时间步的云覆盖率
+            cloud_coverage_ratios = []
+            for t in range(self.s2_bands.shape[0]):
+                mask_t = self.s2_masks[t]  # (H, W)
+                total_pixels = mask_t.size
+                valid_pixels = np.sum(mask_t)
+                cloud_coverage = 1.0 - (valid_pixels / total_pixels)
+                cloud_coverage_ratios.append(cloud_coverage)
+            
+            cloud_coverage_ratios = np.array(cloud_coverage_ratios)
+            
+            # 按云覆盖率升序排列，选择前max_s2_obs个
+            sorted_indices = np.argsort(cloud_coverage_ratios)
+            selected_indices = sorted_indices[:self.max_s2_obs]
+            selected_indices = np.sort(selected_indices)
+            
+            # 记录抛弃和保留的时间步信息
+            discarded_indices = sorted_indices[self.max_s2_obs:]
+            discarded_doys = self.s2_doys[discarded_indices]
+            discarded_coverage = cloud_coverage_ratios[discarded_indices]
+            retained_doys = self.s2_doys[selected_indices]
+            retained_coverage = cloud_coverage_ratios[selected_indices]
+            
+            logging.info(f"抛弃的S2时间步 - DOY: {discarded_doys.tolist()}, 云覆盖率: {[f'{c:.3f}' for c in discarded_coverage]}")
+            logging.info(f"保留的S2时间步 - DOY: {retained_doys.tolist()}, 云覆盖率: {[f'{c:.3f}' for c in retained_coverage]}")
+            
+            # 更新数据
+            self.s2_bands = self.s2_bands[selected_indices]
+            self.s2_masks = self.s2_masks[selected_indices]
+            self.s2_doys = self.s2_doys[selected_indices]
+            
+            logging.info(f"S2观测数量超过阈值{self.max_s2_obs}，基于云覆盖率进行智能抛弃后保留{len(selected_indices)}个时间步")
+            logging.info(f"抛弃后S2的DOY: {self.s2_doys.tolist()}")
+        
+        # S1智能抛弃逻辑
+        if self.max_s1_obs is not None:
+            # 合并升轨和降轨数据
+            s1_bands_all = np.concatenate([self.s1_asc_bands, self.s1_desc_bands], axis=0)
+            s1_doys_all = np.concatenate([self.s1_asc_doys, self.s1_desc_doys], axis=0)
+            s1_orbit_types = np.concatenate([
+                np.zeros(len(self.s1_asc_doys), dtype=int),  # 0表示升轨
+                np.ones(len(self.s1_desc_doys), dtype=int)   # 1表示降轨
+            ])
+            
+            total_s1_obs = len(s1_doys_all)
+            
+            if total_s1_obs > self.max_s1_obs:
+                logging.info(f"S1观测数量超过阈值{self.max_s1_obs}，基于有效数据比例进行智能抛弃")
+                
+                # 计算每个时间步的有效数据比例
+                valid_data_ratios = []
+                for t in range(total_s1_obs):
+                    bands_t = s1_bands_all[t]  # (H, W, 2)
+                    # 计算有效像素（两个波段都不为0）
+                    valid_mask = np.any(bands_t != 0, axis=-1)  # (H, W)
+                    total_pixels = valid_mask.size
+                    valid_pixels = np.sum(valid_mask)
+                    valid_ratio = valid_pixels / total_pixels
+                    valid_data_ratios.append(valid_ratio)
+                
+                valid_data_ratios = np.array(valid_data_ratios)
+                
+                # 按有效数据比例降序排列，选择前max_s1_obs个
+                sorted_indices = np.argsort(valid_data_ratios)[::-1]
+                selected_indices = sorted_indices[:self.max_s1_obs]
+                selected_indices = np.sort(selected_indices)
+                
+                # 记录抛弃和保留的时间步信息
+                discarded_indices = sorted_indices[self.max_s1_obs:]
+                discarded_doys = s1_doys_all[discarded_indices]
+                discarded_ratios = valid_data_ratios[discarded_indices]
+                retained_doys = s1_doys_all[selected_indices]
+                retained_ratios = valid_data_ratios[selected_indices]
+                
+                logging.info(f"抛弃的S1时间步 - DOY: {discarded_doys.tolist()}, 有效数据比例: {[f'{r:.3f}' for r in discarded_ratios]}")
+                logging.info(f"保留的S1时间步 - DOY: {retained_doys.tolist()}, 有效数据比例: {[f'{r:.3f}' for r in retained_ratios]}")
+                
+                # 分离升轨和降轨数据
+                selected_s1_bands = s1_bands_all[selected_indices]
+                selected_s1_doys = s1_doys_all[selected_indices]
+                selected_orbit_types = s1_orbit_types[selected_indices]
+                
+                # 重新分配到升轨和降轨
+                asc_mask = selected_orbit_types == 0
+                desc_mask = selected_orbit_types == 1
+                
+                self.s1_asc_bands = selected_s1_bands[asc_mask]
+                self.s1_asc_doys = selected_s1_doys[asc_mask]
+                self.s1_desc_bands = selected_s1_bands[desc_mask]
+                self.s1_desc_doys = selected_s1_doys[desc_mask]
+                
+                logging.info(f"S1观测数量超过阈值{self.max_s1_obs}，基于有效数据比例进行智能抛弃后保留{len(selected_indices)}个时间步")
+                logging.info(f"抛弃后S1的DOY: {selected_s1_doys.tolist()}")
+                logging.info(f"升轨数据: {len(self.s1_asc_doys)}个, 降轨数据: {len(self.s1_desc_doys)}个")
 
     def __len__(self):
         return len(self.valid_pixels)

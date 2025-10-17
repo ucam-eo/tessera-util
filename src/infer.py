@@ -54,7 +54,9 @@ def main():
     dataset = SingleTileInferenceDataset(
         tile_path=config["tile_path"],
         min_valid_timesteps=config["min_valid_timesteps"],
-        standardize=False  # 注意：在 sample 时才做标准化
+        standardize=False,  # 注意：在 sample 时才做标准化
+        max_s2_obs=config.get("max_s2_obs"),
+        max_s1_obs=config.get("max_s1_obs")
     )
     loader = DataLoader(
         dataset,
@@ -289,7 +291,7 @@ def main():
     out_array = out_array.reshape(H, W, latent_dim)
 
     np.save(config["output_npy"], out_array)
-    logging.info(f"Saved final representation to {config["output_npy"]}, shape={out_array.shape}")
+    logging.info(f'Saved final representation to {config["output_npy"]}, shape={out_array.shape}')
 
 if __name__ == "__main__":
     main()

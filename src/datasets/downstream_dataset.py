@@ -50,7 +50,9 @@ class AustrianCrop(Dataset):
                  standardize=True,
                  min_valid_timesteps=0,
                  sample_size_s2=20,
-                 sample_size_s1=20):
+                 sample_size_s1=20,
+                 max_s2_obs=None,
+                 max_s1_obs=None):
         super().__init__()
         self.s2_bands_data = np.load(s2_bands_file_path)
         self.s2_masks_data = np.load(s2_masks_file_path)
@@ -94,6 +96,135 @@ class AustrianCrop(Dataset):
         self.sample_size_s2 = sample_size_s2
         self.sample_size_s1 = sample_size_s1
         self.num_augmentation_pairs = num_augmentation_pairs
+        self.max_s2_obs = max_s2_obs
+        self.max_s1_obs = max_s1_obs
+
+        # 统计观测数量并打印
+        s2_total_obs = len(self.s2_doys_data)
+        s1_asc_obs = len(self.s1_asc_doys_data)
+        s1_desc_obs = len(self.s1_desc_doys_data)
+        s1_total_obs = s1_asc_obs + s1_desc_obs
+        
+        logging.info(f"原始观测数量统计 - 哨兵2: {s2_total_obs}, 哨兵1升轨: {s1_asc_obs}, 哨兵1降轨: {s1_desc_obs}, 哨兵1总计: {s1_total_obs}")
+        
+        # 如果设置了最大观测数量限制，则进行基于云覆盖率的智能抛弃
+        if self.max_s2_obs is not None and s2_total_obs > self.max_s2_obs:
+            # 计算每个时间步的云覆盖率（无效像素比例）
+            # s2_masks_data shape: (time_steps, height, width)
+            cloud_coverage_per_timestep = []
+            for t in range(self.s2_masks_data.shape[0]):
+                # 计算该时间步所有像素的云覆盖率
+                total_pixels = self.s2_masks_data.shape[1] * self.s2_masks_data.shape[2]
+                valid_pixels = np.sum(self.s2_masks_data[t])  # mask中1为有效，0为云覆盖
+                cloud_coverage = 1.0 - (valid_pixels / total_pixels)  # 云覆盖率
+                cloud_coverage_per_timestep.append(cloud_coverage)
+            
+            cloud_coverage_per_timestep = np.array(cloud_coverage_per_timestep)
+            
+            # 按云覆盖率升序排序，优先保留云覆盖率低的时间步
+            sorted_indices = np.argsort(cloud_coverage_per_timestep)  # 升序
+            
+            # 选择要保留的时间步（云覆盖率较低的）
+            keep_indices = sorted_indices[:self.max_s2_obs]  # 保留云覆盖率最低的max_s2_obs个
+            keep_indices = np.sort(keep_indices)  # 按时间顺序重新排序
+            
+            # 记录被抛弃的时间步信息
+            discard_indices = sorted_indices[self.max_s2_obs:]
+            discard_doys = self.s2_doys_data[discard_indices] if len(discard_indices) > 0 else []
+            discard_cloud_coverage = cloud_coverage_per_timestep[discard_indices] if len(discard_indices) > 0 else []
+            
+            # 应用抛弃
+            self.s2_bands_data = self.s2_bands_data[keep_indices]
+            self.s2_masks_data = self.s2_masks_data[keep_indices]
+            self.s2_doys_data = self.s2_doys_data[keep_indices]
+            
+            logging.info(f"S2观测数量超过阈值{self.max_s2_obs}，基于云覆盖率智能抛弃后保留{len(self.s2_doys_data)}个时间步")
+            if len(discard_indices) > 0:
+                logging.info(f"抛弃的S2时间步DOY: {sorted(discard_doys.tolist())}")
+                logging.info(f"抛弃的S2时间步云覆盖率: {[f'{x:.3f}' for x in sorted(discard_cloud_coverage)]}")
+            logging.info(f"保留的S2时间步DOY: {sorted(self.s2_doys_data.tolist())}")
+            logging.info(f"保留的S2时间步云覆盖率: {[f'{x:.3f}' for x in sorted(cloud_coverage_per_timestep[keep_indices])]}")
+        
+        if self.max_s1_obs is not None and s1_total_obs > self.max_s1_obs:
+            # 合并S1升轨和降轨数据进行统一采样
+            s1_all_bands = np.concatenate([self.s1_asc_bands_data, self.s1_desc_bands_data], axis=0)
+            s1_all_doys = np.concatenate([self.s1_asc_doys_data, self.s1_desc_doys_data], axis=0)
+            s1_all_masks = np.concatenate([self.s1_asc_masks_data, self.s1_desc_masks_data], axis=0)
+            
+            # 计算每个时间步的有效数据比例（两个波段都不为0）
+            valid_data_ratios = []
+            for i in range(s1_total_obs):
+                # 获取当前时间步的数据
+                timestep_data = s1_all_bands[i]  # shape: (H, W, 2)
+                # 计算有效像素（两个波段都不为0）
+                valid_pixels = np.all(timestep_data != 0, axis=-1)  # shape: (H, W)
+                # 计算有效数据比例
+                total_pixels = valid_pixels.size
+                valid_pixel_count = np.sum(valid_pixels)
+                valid_ratio = valid_pixel_count / total_pixels if total_pixels > 0 else 0.0
+                valid_data_ratios.append(valid_ratio)
+            
+            valid_data_ratios = np.array(valid_data_ratios)
+            
+            # 根据有效数据比例排序，优先保留有效数据比例高的时间步
+            sorted_indices = np.argsort(valid_data_ratios)[::-1]  # 降序排列
+            s1_indices = sorted_indices[:self.max_s1_obs]
+            s1_indices = np.sort(s1_indices)
+            
+            # 记录抛弃和保留的时间步信息
+            discarded_indices = sorted_indices[self.max_s1_obs:]
+            discarded_doys = s1_all_doys[discarded_indices]
+            discarded_ratios = valid_data_ratios[discarded_indices]
+            retained_doys = s1_all_doys[s1_indices]
+            retained_ratios = valid_data_ratios[s1_indices]
+            
+            logging.info(f"S1观测数量超过阈值{self.max_s1_obs}，基于有效数据比例进行智能抛弃")
+            logging.info(f"抛弃的S1时间步 - DOY: {sorted(discarded_doys.tolist())}, 有效数据比例: {[f'{r:.3f}' for r in discarded_ratios]}")
+            logging.info(f"保留的S1时间步 - DOY: {sorted(retained_doys.tolist())}, 有效数据比例: {[f'{r:.3f}' for r in retained_ratios]}")
+            
+            # 重新分配到升轨和降轨
+            selected_bands = s1_all_bands[s1_indices]
+            selected_doys = s1_all_doys[s1_indices]
+            selected_masks = s1_all_masks[s1_indices]
+            
+            # 保持升轨和降轨的合理分布
+            n_asc_orig = len(self.s1_asc_bands_data)
+            n_desc_orig = len(self.s1_desc_bands_data)
+            
+            # 按比例分配选中的数据到升轨和降轨
+            if n_asc_orig + n_desc_orig > 0:
+                asc_ratio = n_asc_orig / (n_asc_orig + n_desc_orig)
+                n_asc_keep = max(1, int(self.max_s1_obs * asc_ratio))  # 至少保留1个
+                n_desc_keep = self.max_s1_obs - n_asc_keep
+                
+                # 确保不超过原始数据量
+                n_asc_keep = min(n_asc_keep, len(selected_bands))
+                n_desc_keep = min(n_desc_keep, len(selected_bands) - n_asc_keep)
+                
+                # 分配数据
+                self.s1_asc_bands_data = selected_bands[:n_asc_keep]
+                self.s1_asc_doys_data = selected_doys[:n_asc_keep]
+                self.s1_asc_masks_data = selected_masks[:n_asc_keep]
+                
+                if n_desc_keep > 0:
+                    self.s1_desc_bands_data = selected_bands[n_asc_keep:n_asc_keep+n_desc_keep]
+                    self.s1_desc_doys_data = selected_doys[n_asc_keep:n_asc_keep+n_desc_keep]
+                    self.s1_desc_masks_data = selected_masks[n_asc_keep:n_asc_keep+n_desc_keep]
+                else:
+                    self.s1_desc_bands_data = np.zeros((0,) + self.s1_desc_bands_data.shape[1:], dtype=self.s1_desc_bands_data.dtype)
+                    self.s1_desc_doys_data = np.array([], dtype=self.s1_desc_doys_data.dtype)
+                    self.s1_desc_masks_data = np.zeros((0,) + self.s1_desc_masks_data.shape[1:], dtype=bool)
+            else:
+                # 如果原始数据为空，保持空状态
+                self.s1_asc_bands_data = np.zeros((0,) + self.s1_asc_bands_data.shape[1:], dtype=self.s1_asc_bands_data.dtype)
+                self.s1_asc_doys_data = np.array([], dtype=self.s1_asc_doys_data.dtype)
+                self.s1_asc_masks_data = np.zeros((0,) + self.s1_asc_masks_data.shape[1:], dtype=bool)
+                self.s1_desc_bands_data = np.zeros((0,) + self.s1_desc_bands_data.shape[1:], dtype=self.s1_desc_bands_data.dtype)
+                self.s1_desc_doys_data = np.array([], dtype=self.s1_desc_doys_data.dtype)
+                self.s1_desc_masks_data = np.zeros((0,) + self.s1_desc_masks_data.shape[1:], dtype=bool)
+            
+            logging.info(f"S1观测数量超过阈值{self.max_s1_obs}，基于有效数据比例进行智能抛弃后保留{len(selected_doys)}个时间步")
+            logging.info(f"抛弃后S1的DOY: {sorted(selected_doys.tolist())}")
 
         # 构建所有像素坐标
         _, H, W, _ = self.s2_bands_data.shape
@@ -151,13 +282,22 @@ class AustrianCrop(Dataset):
         s1_doys_all  = np.concatenate([s1_asc_doys,  s1_desc_doys], axis=0)
         valid_mask = np.any(s1_bands_all != 0, axis=-1)
         valid_idx = np.nonzero(valid_mask)[0]
-        if len(valid_idx) < self.sample_size_s1:
+        
+        # 如果没有有效数据，创建零填充的结果
+        if len(valid_idx) == 0:
+            sub_bands = np.zeros((self.sample_size_s1, s1_bands_all.shape[1]), dtype=s1_bands_all.dtype)
+            sub_doys = np.zeros(self.sample_size_s1, dtype=s1_doys_all.dtype)
+        elif len(valid_idx) < self.sample_size_s1:
             sampled_idx = np.random.choice(valid_idx, size=self.sample_size_s1, replace=True)
+            sampled_idx = np.sort(sampled_idx)
+            sub_bands = s1_bands_all[sampled_idx, :]
+            sub_doys  = s1_doys_all[sampled_idx]
         else:
             sampled_idx = np.random.choice(valid_idx, size=self.sample_size_s1, replace=False)
-        sampled_idx = np.sort(sampled_idx)
-        sub_bands = s1_bands_all[sampled_idx, :]
-        sub_doys  = s1_doys_all[sampled_idx]
+            sampled_idx = np.sort(sampled_idx)
+            sub_bands = s1_bands_all[sampled_idx, :]
+            sub_doys  = s1_doys_all[sampled_idx]
+            
         if self.standardize:
             sub_bands = (sub_bands - self.s1_band_mean) / (self.s1_band_std + 1e-9)
         # doys_norm = sub_doys / 365.0

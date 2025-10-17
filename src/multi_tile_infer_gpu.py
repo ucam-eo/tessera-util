@@ -159,7 +159,9 @@ def process_tile(tile_path, output_path, model, config, device, process_id):
         dataset = SingleTileInferenceDataset(
             tile_path=tile_path,
             min_valid_timesteps=config["min_valid_timesteps"],
-            standardize=False  # Standardize during sampling
+            standardize=False,  # Standardize during sampling
+            max_s2_obs=config.get("max_s2_obs", None),
+            max_s1_obs=config.get("max_s1_obs", None)
         )
         
         loader = DataLoader(
