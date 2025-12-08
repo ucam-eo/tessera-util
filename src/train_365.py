@@ -388,7 +388,7 @@ def main():
 
     # W&B init
     if local_rank == 0:
-        os.environ["WANDB_API_KEY"] = "b03eca52bd30c1fa9bf185ae3ee91d9276f2f92a"
+        os.environ["WANDB_API_KEY"] = ""
         if config.get("disable_wandb_git", False):
             os.environ['WANDB_DISABLE_GIT'] = 'true'
         run_name = f"BT_365_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
