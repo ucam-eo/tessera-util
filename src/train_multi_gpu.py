@@ -168,7 +168,7 @@ def main():
         logging.info(f"Running on {world_size} GPU(s). LocalRank={local_rank}, device={device}")
     
     if local_rank == 0:
-        os.environ["WANDB_API_KEY"] = "b03eca52bd30c1fa9bf185ae3ee91d9276f2f92a"
+        os.environ["WANDB_API_KEY"] = ""
 
     # 如果用户想禁用W&B获取git信息，可添加环境变量，避免 "dubious ownership" 警告
     if config.get("disable_wandb_git", False):
