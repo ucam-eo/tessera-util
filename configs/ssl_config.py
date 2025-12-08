@@ -36,10 +36,10 @@ config = {
                                         # 设置为 0 则从一开始就应用
 
     # 投影头维度
-    # "projector_out_dim": 8192*2,
-    # "projector_hidden_dim": 8192*2,
-    "projector_out_dim": 128,
-    "projector_hidden_dim": 128,
+    "projector_out_dim": 8192*2,
+    "projector_hidden_dim": 8192*2,
+    # "projector_out_dim": 128,
+    # "projector_hidden_dim": 128,
 
     "sample_size_s2": 40,
     "sample_size_s1": 40,
@@ -75,7 +75,7 @@ config = {
     "beta_beta": 1.0,
 
     # "total_samples": 132000000,
-    "total_samples": 465 * 1000000,
+    "total_samples": 812 * 1000000,
     # "total_samples": 15000000,
 
     "rust_cmd": (
