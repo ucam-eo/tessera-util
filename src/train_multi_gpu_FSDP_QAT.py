@@ -379,7 +379,7 @@ def main():
         if not os.environ.get("WANDB_API_KEY") and config.get("wandb_api_key"):
              os.environ["WANDB_API_KEY"] = config["wandb_api_key"]
         if not os.environ.get("WANDB_API_KEY"): # Default if still not set
-             os.environ["WANDB_API_KEY"] = "b03eca52bd30c1fa9bf185ae3ee91d9276f2f92a" # Original hardcoded
+             os.environ["WANDB_API_KEY"] = "" # Original hardcoded
 
         wandb_run = wandb.init(
             project=config.get("wandb_project", "btfm-iterable-qat"), 
